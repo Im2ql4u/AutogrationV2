@@ -173,6 +173,8 @@ uv run tiein optimise step settle-w1 --dry-run                   # next wave: ne
 uv run tiein optimise step settle-w1 soften-w1 --watch 900       # follow, score, submit until done
 uv run tiein optimise status settle-w1                           # evaluations so far (offline)
 uv run tiein optimise report settle-w1                            # tables, frontier, settlement
+uv run tiein optimise rescore settle-w1 soften-w1                 # score completed runs again (stop the watch first)
+uv run tiein optimise retry settle-w1 e003                        # a failed evaluation once more (stop the watch first)
 uv run tiein optimise cancel settle-w1
 ```
 
@@ -191,7 +193,19 @@ uv run tiein optimise cancel settle-w1
 - **Shared runs.** Studies in the same project that need an identical request (the same
   base and baseline runs, say) use the run another study already started. The dry run
   shows them under "shares", they don't count against the budget, and `cancel` leaves
-  them running.
+  them running. A shared run that failed is never followed again: the first study to
+  retry starts a new run and the others follow that one.
+- **Failed runs.** Infrastructure failures are retried up to `budget.max_attempts`
+  (2). Up to 3 attempts that found no OpenServer licence don't count toward it. `retry`
+  tries a failed evaluation once more past that. If it is a search point and the study
+  is already confirming, the study waits for it and confirms it if it ranks among the
+  best.
+- **Limits the base breaks too.** A run's step above a booking or FPSO limit doesn't
+  make it infeasible when the base on the same grid has the same step over (same
+  group, period and phase) and the run is at most the tolerance (2 points) worse.
+  `status` notes these as "N step(s) over a limit as in the base". Turn this off with
+  `constraints: {inherit_violations: false}`. After a change to scoring, `rescore`
+  scores the completed runs again from the cached results.
 - **Watching.** `step --watch` rides out gateway errors and expired tokens. To keep a
   log, set `PYTHONUNBUFFERED=1` and redirect the output; the VS Code tasks **Study:
   optimise watch (all studies)** and **Study: optimise watch log** do this.

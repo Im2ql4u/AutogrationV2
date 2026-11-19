@@ -199,6 +199,7 @@ def test_step_watches_several_studies_and_rides_out_a_gateway_error(
     assert "shared (another study's identical run, no new run): e001, e002" in captured.out
 
     assert cli._transient(httpx.ConnectError("down"))
+    assert cli._transient(cli.SignInError("sign-in failed: getaddrinfo failed"))
     assert cli._transient(cli.AutogrationError(401, "GET", "tasks", "expired"))
     assert not cli._transient(cli.AutogrationError(422, "POST", "simulate", "bad request"))
 

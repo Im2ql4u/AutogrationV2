@@ -107,7 +107,7 @@ does).
 | AkerBP/autogration#1101 | `feature/optional-projects` | Optional projects | **closed** 19 Nov: projects dropped |
 | AkerBP/autogration_frontend#165 | `feature/results-projects` | Results project mode with booking, settlement and frontier visuals | open, to be replaced by the run picker plus these visuals; Copilot's round-2 comments (3) not fixed |
 | AkerBP/autogration#1102 + AkerBP/autogration_frontend#166 | `feature/preset-dataobject-tables` | Presets also store DataObject table edits | **draft**: probably superseded by linked-assumptions presets. #166 has both round-2 Copilot fixes pushed (`2efc4ba`) |
-| frontend, not yet a PR | `feature/results-run-picker` | Results run picker (above) | being built |
+| frontend, not yet a PR | `feature/results-run-picker` | Results run picker (above) | pushed (`8761953`, `7d0dde6`), checked in the browser against test; no PR yet |
 | frontend, not yet a PR | `fix/results-units` | `1000Sm3/d` and other multiplier units on the Results page (P10) | done locally (`8078e56`, 329 tests); not pushed |
 | merged 15 Nov | – | #1076 (archive names with brackets), #1077 (fetch missing files before validation), #1079, frontend #138 (Results section) | merged |
 
@@ -159,11 +159,30 @@ enough on this model (A3).
 **Timing.** MH runs take about 2 h, so the first candidate waves start late morning on
 19 Nov. Monthly confirmations take 6–7 h each.
 
-**Status, 19 Nov afternoon.** e001 and e002 are scored: base 22.33 M and reference
-(Froskelår off) 20.01 M Sm3 oe. The first candidate waves were still running at the
-last check (restructure-w1: 4 of 10 runs; soften-w1: 7 of 14; outer-w1: 7 of 30). Each
-study runs one simulation per candidate today. Once linked assumptions are on test, a
-wave can go in as one linked simulation (above).
+**Status, 19 Nov 16:07.** Every study except outer-w1 has reached monthly confirmation;
+outer-w1 is still screening. Values in Sm3 oe:
+
+- base: 22.33 M on MH and 21.94 M monthly (M BASE, reused);
+- reference (Froskelår off): 20.01 M on MH and 20.08 M monthly.
+
+| Study | Best on MH so far | Runs used | Now |
+|---|---|---|---|
+| soften-w1 | α=0, β=1: 22.76 M (+429k) | 8 of 14 | three monthly confirmations running; e003 again (shared) |
+| outer-w1 | α=0, β=0.5, γ=1.2: 22.99 M (+660k) | 6 of 30 | screening; e005 again (shared). Three screening points are infeasible (liquid +28 % to +61 % over a booking) |
+| settle-w1 | release bookings: 22.27 M (−59k) | 6 of 8 | two monthly confirmations running; neutral weights (e003) again |
+| restructure-w1 | R4 pro rata: 22.39 M (+54k) | 4 of 10 | two monthly confirmations running |
+
+- **The monthly base breaks a booking (M4).** Boyla+Frosk liquid is 13.6 % over its
+  booking in three months. A run's step over a limit doesn't count against it when the
+  base has the same step over (T15). Status shows these as "N step(s) over a limit as in
+  the base".
+- **Retried run.** Neutral weights (settle-w1 e003) is the same run as soften-w1 e003
+  and outer-w1 e005. It found no OpenServer licence and was then followed again instead
+  of being run again (T16, fixed). It is running again as settle-w1 e003 a3, and the
+  confirm stages confirm it if it ranks.
+
+Each study runs one simulation per candidate today. Once linked assumptions are on test,
+a wave can go in as one linked simulation (above).
 
 ## How to reproduce or follow
 
@@ -174,8 +193,10 @@ uv run tiein project show --project froskelaar-fixed       # cases, runs, web co
 uv run tiein optimise status settle-w1 --project froskelaar-fixed
 uv run tiein optimise step settle-w1 restructure-w1 soften-w1 outer-w1 --project froskelaar-fixed --watch 900
 uv run tiein optimise report settle-w1 --project froskelaar-fixed --rule minimal
+uv run tiein optimise rescore settle-w1 --project froskelaar-fixed   # after a scoring change; stop the watch first
+uv run tiein optimise retry settle-w1 e003 --project froskelaar-fixed # a failed run once more; stop the watch first
 uv run tiein bookings --project froskelaar-fixed            # booked vs produced, violations.csv
-uv run pytest -q                                            # 231 tests
+uv run pytest -q                                            # 238 tests
 ```
 
 The VS Code tasks **Study: optimise watch (all studies)** and **Study: optimise watch log**

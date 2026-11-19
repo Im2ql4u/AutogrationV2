@@ -16,7 +16,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -116,10 +116,18 @@ def run_digest(body: Mapping[str, Any]) -> str:
 
 
 def shared_run(
-    project_paths: ProjectPaths, study: str, digest: str, *, model_id: str, environment: str | None
+    project_paths: ProjectPaths,
+    study: str,
+    digest: str,
+    *,
+    model_id: str,
+    environment: str | None,
+    exclude: Collection[str] = (),
 ) -> tuple[str, st.Evaluation] | None:
     """Another study's run of the same request on the same model and environment that is
-    running or completed, as (``study eid``, evaluation)."""
+    running or completed, as (``study eid``, evaluation). Runs in ``exclude`` (the
+    asking evaluation's failed attempts) are left out: the other study may not have seen
+    them fail yet."""
     for name in study_names(project_paths):
         if name == study:
             continue
@@ -129,7 +137,9 @@ def shared_run(
         for ev in other.evaluations:
             if ev.digest != digest or ev.group_id is None:
                 continue
-            running = ev.status == "submitted"
+            if ev.group_id in exclude or (ev.task_id is not None and ev.task_id in exclude):
+                continue
+            running = ev.status == "submitted" and ev.task_status not in (st.FAILED, st.CANCELLED)
             completed = ev.status in ("completed", "scored") and ev.task_status == st.COMPLETED
             if running or completed:
                 return f"{name} {ev.id}", ev
@@ -316,8 +326,8 @@ class Study:
         if dry_run:
             out.requests = [(ev.id, self.request(ev)) for ev in proposed]
             out.waiting = [ev.id for ev in proposed]
-            for eid, body in out.requests:
-                found = self.shared_run(body)
+            for ev, (eid, body) in zip(proposed, out.requests, strict=True):
+                found = self.shared_run(body, exclude=ev.failed_runs)
                 if found is not None:
                     out.shares[eid] = found[0]
             return out
@@ -326,7 +336,9 @@ class Study:
         self.save()
         return out
 
-    def shared_run(self, body: Mapping[str, Any]) -> tuple[str, st.Evaluation] | None:
+    def shared_run(
+        self, body: Mapping[str, Any], *, exclude: Collection[str] = ()
+    ) -> tuple[str, st.Evaluation] | None:
         s = self.state
         return shared_run(
             self.ctx.project_paths,
@@ -334,6 +346,7 @@ class Study:
             run_digest(body),
             model_id=s.model_id,
             environment=s.environment,
+            exclude=exclude,
         )
 
     def request(self, ev: st.Evaluation) -> dict[str, Any]:
@@ -379,9 +392,34 @@ class Study:
                 s.case_tasks[case] = task_id
 
     def _score(self, backend: Backend) -> list[str]:
+        ready = [ev for ev in self.state.evaluations if ev.status == "completed"]
+        return self._score_runs(ready, backend)
+
+    def rescore(self, backend: Backend) -> list[str]:
+        """Score every completed run again from its cached results, the base and
+        reference cases first: after a change to scoring. Choices the search has made
+        stand; later ones use the new scores."""
+        done = [
+            ev
+            for ev in self.state.evaluations
+            if ev.status == "scored" and ev.task_id is not None and ev.task_status == st.COMPLETED
+        ]
+        scored = self._score_runs(done, backend)
+        self.save()
+        return scored
+
+    def revive(self, eids: Sequence[str], now: dt.datetime | None = None) -> list[st.Evaluation]:
+        """Try evaluations whose runs failed once more (:meth:`StudyState.revive`); the
+        next tick submits them. Nothing changes unless every one can be."""
+        state = self.state.model_copy(deep=True)
+        revived = [state.revive(eid, now) for eid in eids]
+        self.state = state
+        self.save()
+        return revived
+
+    def _score_runs(self, ready: list[st.Evaluation], backend: Backend) -> list[str]:
         s = self.state
-        ready = [ev for ev in s.evaluations if ev.status == "completed"]
-        ready.sort(key=lambda ev: not (ev.base or ev.reference))
+        ready = sorted(ready, key=lambda ev: not (ev.base or ev.reference))
         scored = []
         limits = self._fpso_limits() if ready else None
         for ev in ready:
@@ -445,7 +483,7 @@ class Study:
         fresh = []
         for ev in proposed:
             body = self.request(ev)
-            found = self.shared_run(body)
+            found = self.shared_run(body, exclude=ev.failed_runs)
             if found is None:
                 fresh.append((ev, body))
                 continue

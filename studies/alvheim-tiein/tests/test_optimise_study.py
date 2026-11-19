@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import json
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
@@ -223,6 +225,60 @@ def test_infrastructure_failures_are_retried_and_model_failures_are_not() -> Non
     score_all(s, outer_score)
     assert s.plan(T0) == []
     assert s.finished and s.stop_reason == "base_infeasible"
+
+
+def test_runs_that_found_no_licence_do_not_use_up_attempts() -> None:
+    s = start(spec())
+    base, _ = s.plan(T0)
+    no_licence = {"category": "job_failed", "message": "22: No OpenServer license available"}
+    lost = {"category": "job_failed", "message": "node lost"}
+    for n, failure in enumerate([no_licence] * 3 + [lost], start=1):
+        s.record_submission(base.id, {"assumption_group_id": f"g{n}"}, now=T0)
+        s.record_status(base.id, {"task_id": f"t{n}", "status": st.FAILED}, failure=failure)
+        assert (base.status, base.attempt) == ("proposed", n + 1)
+    s.record_submission(base.id, {"assumption_group_id": "g5"}, now=T0)
+    s.record_status(base.id, {"task_id": "t5", "status": st.FAILED}, failure=lost, now=T0)
+    assert base.status == "scored" and base.score is not None
+    assert "node lost" in base.score.reasons[0]
+    assert base.failed_runs == {f"{p}{n}" for p in "tg" for n in range(1, 5)}
+
+
+def test_a_revived_run_is_waited_for_and_confirmed_if_it_ranks() -> None:
+    s = start(
+        settle_spec(
+            fidelity={"search": "mh", "confirm": "monthly"}, constraints={}, budget={"confirm": 1}
+        )
+    )
+    wave(s, by_label)  # the base and the reference case on MH
+    hub, fair = s.plan(T0)
+    for ev in (hub, fair):
+        s.record_submission(ev.id, {"assumption_group_id": f"g-{ev.id}"}, now=T0)
+    crashed = {"category": "execution_error", "message": "OpenServer stopped"}
+    s.record_status(hub.id, {"task_id": "t-hub", "status": st.FAILED}, failure=crashed)
+    assert hub.status == "scored" and hub.score is not None and not hub.score.feasible
+    complete(s)
+    score_all(s, by_label)
+    submit(s)
+    confirm = list(s.stage_ids["confirm"])
+    assert [s.get(i).label for i in confirm] == ["base", "ref:baseline", "fair"]
+
+    with pytest.raises(ValueError, match="no failed run"):
+        s.revive(fair.id)
+    s.revive(hub.id, T0)
+    assert (hub.status, hub.attempt, hub.score, hub.spent) == ("proposed", 2, None, 2)
+    assert hub.failed_runs == {"t-hub", f"g-{hub.id}"}
+    complete(s)
+    score_all(s, by_label)
+    assert s.plan(T0) == [hub]  # the confirmed runs are in: confirm waits for the hub
+    wave(s, by_label)
+    late = s.plan(T0)
+    assert [(ev.label, ev.fidelity, ev.source) for ev in late] == [("hub", "monthly", hub.id)]
+    assert s.stage_ids["confirm"] == [*confirm, late[0].id]
+    wave(s, by_label)
+    assert s.plan(T0) == [] and s.finished
+    assert s.outcome()["label"] == "hub" and s.outcome()["fidelity"] == "monthly"
+    with pytest.raises(ValueError, match="has finished"):
+        s.revive(hub.id)
 
 
 def test_specs_are_checked_before_anything_runs() -> None:
@@ -484,6 +540,66 @@ def test_scores_record_booked_capacity_from_the_runs_own_limits(ref26: Reference
     assert "booked capacity without the host's residual: no FPSO limits" in bare.notes
 
 
+def test_violations_the_base_has_too_are_noted_not_held_against_a_run(ref26: Reference) -> None:
+    s = spec(objective="oil_sm3")
+    grid = s.fidelity.steps("mh")
+    n = len(grid)
+    members = {"G": ["H1", "S1"]}
+    applied = tracked_bookings(grid, oil=3.0, gas=1e6)
+
+    def score(
+        ev: st.Evaluation, s1: float, comparator: st.Score | None = None, sp: st.StudySpec = s
+    ) -> st.Score:
+        res = results(grid, {"H1": 1.0, "S1": s1})
+        res = pd.concat([res, res.assign(property_name="OilRate")], ignore_index=True)
+        return st.score_results(
+            sp,
+            ev,
+            status=st.COMPLETED,
+            results=res,
+            ref=ref26,
+            steps=applied,
+            members=members,
+            comparator=comparator,
+        )
+
+    # G produces 4 against an oil limit of 3 at every step, as GAP does in the model (M4).
+    base_ev = point("mh").model_copy(update={"id": "e001", "base": True})
+    base = score(base_ev, 3.0)
+    assert base.feasible and base.checks["inherited_violations"] == n
+    assert base.violation_steps is not None and len(base.violation_steps) == n
+    assert base.violation_steps[0]["group"] == "G" and base.violation_steps[0]["phase"] == "oil"
+    assert any("in the model as given" in note for note in base.notes)
+
+    same = score(point("mh"), 3.05, comparator=base)  # 4.05 / 3: within 2 points of the base
+    assert same.feasible and not same.reasons
+    assert same.checks["inherited_violations"] == n and same.checks["violations"] == 0
+    assert any("where the base is too" in note for note in same.notes)
+
+    worse = score(point("mh"), 3.5, comparator=base)
+    assert not worse.feasible and worse.checks["violations"] == n
+    assert worse.checks["inherited_violations"] == 0
+
+    unrecorded = score(
+        point("mh"), 3.0, comparator=base.model_copy(update={"violation_steps": None})
+    )
+    assert not unrecorded.feasible and any("rescore" in note for note in unrecorded.notes)
+
+    strict = spec(objective="oil_sm3", constraints={"inherit_violations": False})
+    assert not score(base_ev, 3.0, sp=strict).feasible
+    clean = score(point("mh"), 1.0, comparator=base)
+    assert clean.feasible and clean.violation_steps == []
+
+
+def test_fields_added_later_leave_started_studies_digests_alone() -> None:
+    s = spec()
+    old = s.model_dump(mode="json")
+    del old["constraints"]["inherit_violations"]
+    text = json.dumps(old, sort_keys=True, default=str)
+    assert s.digest() == hashlib.sha256(text.encode()).hexdigest()[:16]
+    assert spec(constraints={"inherit_violations": False}).digest() != s.digest()
+
+
 def scored(eid: str, values: Mapping[str, float], capacity: Mapping[str, float]) -> st.Evaluation:
     return point("monthly").model_copy(
         update={
@@ -577,6 +693,7 @@ class FakeBackend:
         self.bodies: dict[str, dict[str, Any]] = {}
         self.status: dict[str, str] = {}
         self.results: dict[str, pd.DataFrame] = {}
+        self.failures: dict[str, dict[str, str]] = {}
         self.cancelled: list[str] = []
 
     def finish_all(self) -> None:
@@ -599,7 +716,8 @@ class FakeBackend:
         return [{"task_id": task, "status": self.status[task]}]
 
     def task(self, task_id: str) -> dict[str, Any]:
-        return {"task_id": task_id, "status": self.status[task_id], "failure": None}
+        failure = self.failures.get(task_id)
+        return {"task_id": task_id, "status": self.status[task_id], "failure": failure}
 
     def download_results(self, task_id: str, dest_dir: Path) -> Path:
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -710,6 +828,19 @@ def test_study_runs_end_to_end_against_a_fake_autogration(tmp_path: Path, ref26:
     base_rows = tied_rows[tied_rows["against"] == "base"]
     assert set(base_rows["rule"]) == set(rn.SETTLEMENT_RULES)
 
+    # Rescoring (after a change to scoring) reads the cached results again.
+    objectives = {ev.id: ev.score.objective for ev in s.evaluations if ev.score}
+    for ev in s.evaluations:
+        if ev.score:
+            ev.score.violation_steps = None
+    rescored = study.rescore(backend)
+    completed = [ev.id for ev in s.evaluations if ev.task_status == st.COMPLETED]
+    assert sorted(rescored) == sorted(completed) and rescored[0] in ("e001", "e002")
+    assert all(s.get(i).score.violation_steps == [] for i in rescored)  # type: ignore[union-attr]
+    assert {i: s.get(i).score.objective for i in objectives} == objectives  # type: ignore[union-attr]
+    assert s.outcome() == out
+    assert rn.load_state(paths.state).get(rescored[0]).score.violation_steps == []  # type: ignore[union-attr]
+
     # Started: the spec is fixed now.
     paths.spec.write_text(yaml.safe_dump({**STUDY, "description": "v3"}), encoding="utf-8")
     with pytest.raises(ProjectError, match=r"study\.yaml changed"):
@@ -768,3 +899,41 @@ def test_a_second_study_shares_identical_runs_instead_of_starting_them(
     assert set(r.scored) >= {"e001", "e002"}
     studies["settle"].tick(backend, now=T0)
     assert other.get("e001").task_id == studies["settle"].state.get("e001").task_id == "t1"
+
+
+def test_a_shared_run_that_failed_is_started_again_not_followed_again(
+    tmp_path: Path, ref26: Reference
+) -> None:
+    write_project(tmp_path)
+    project, ppaths, _ = Workspace(tmp_path).load("fl")
+    backend = FakeBackend()
+    studies = {}
+    for name in ("settle", "other"):
+        paths = rn.StudyPaths(ppaths, name)
+        paths.root.mkdir(parents=True)
+        paths.spec.write_text(yaml.safe_dump({**STUDY, "name": name}), encoding="utf-8")
+        ctx = rn.StudyContext("fl", project, ppaths, paths, model(), {}, ref26, "r1")
+        studies[name] = rn.Study.open(ctx, now=T0)
+    studies["settle"].tick(backend, now=T0)
+    studies["other"].tick(backend, now=T0)
+    backend.status["t1"] = st.FAILED
+    backend.failures["t1"] = {"category": "job_failed", "message": "No OpenServer license"}
+
+    # The study that started the run sees the failure first; the other one still has it
+    # as submitted. Following that again would fail both on the same run.
+    r = studies["settle"].tick(backend, now=T0)
+    started = studies["settle"].state.get("e001")
+    assert r.submitted == ["e001"] and r.shared == [] and len(backend.bodies) == 3
+    assert (started.attempt, started.group_id, started.shared_from) == (2, "g3", None)
+    r = studies["other"].tick(backend, now=T0)
+    follower = studies["other"].state.get("e001")
+    assert r.shared == ["e001"] and r.submitted == [] and len(backend.bodies) == 3
+    assert (follower.attempt, follower.group_id, follower.shared_from) == (2, "g3", "settle e001")
+    assert follower.history[0]["shared_from"] == "settle e001"
+    assert (started.spent, follower.spent) == (2, 0)
+
+    backend.finish_all()
+    for name in ("settle", "other"):
+        studies[name].tick(backend, now=T0)
+    for ev in (started, follower):
+        assert ev.task_id == "t3" and ev.score is not None and ev.score.feasible

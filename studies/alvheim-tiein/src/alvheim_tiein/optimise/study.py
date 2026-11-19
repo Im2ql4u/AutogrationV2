@@ -31,6 +31,7 @@ import datetime as dt
 import hashlib
 import json
 import math
+import re
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any, Literal
 
@@ -71,10 +72,17 @@ DEFAULT_STAGES: dict[str, tuple[Stage, ...]] = {
 SEARCH_STAGES = frozenset({"screening", "pattern", "grid", "candidates"})
 RETRYABLE_FAILURES = frozenset({"job_failed", "unknown", "blob_parsing_error"})
 """Failure categories worth a second attempt (infrastructure, not the model)."""
+NO_LICENCE = re.compile(r"no openserver licen[cs]e", re.IGNORECASE)
+LICENCE_WAIVER = 3
+"""Attempts of one evaluation that found no free OpenServer licence and are not counted
+against ``max_attempts``: the run never started."""
 COMPLETED, FAILED, CANCELLED = "Completed", "Failed", "Cancelled"
 STATE_VERSION = 1
 _NAME = r"^[a-z0-9][a-z0-9-]*$"
 _KEY_DIGITS = 9
+_ADDED_FIELDS: dict[tuple[str, str], Any] = {("constraints", "inherit_violations"): True}
+"""Spec fields added after studies had started, with their defaults: left out of the
+digest at the default, so those studies still open."""
 
 
 def now_utc() -> dt.datetime:
@@ -163,6 +171,12 @@ class Constraints(BaseModel):
     no_loss_against: str = "base"
     no_loss_tol: float = Field(default=0.0, ge=0)
     violation_tol: float = Field(default=0.02, ge=0)
+    inherit_violations: bool = Field(
+        default=True,
+        description="Steps above a group limit that the base on the same grid has too (the "
+        "model as given, M4) are noted, not infeasible; the base and reference cases keep "
+        "theirs. False: every violation is infeasible.",
+    )
     check_logs: bool = Field(
         default=False,
         description="Treat solver/OpenServer error lines in the task logs as infeasible.",
@@ -331,7 +345,11 @@ class StudySpec(BaseModel):
         return n
 
     def digest(self) -> str:
-        text = json.dumps(self.model_dump(mode="json"), sort_keys=True, default=str)
+        data = self.model_dump(mode="json")
+        for (section, key), default in _ADDED_FIELDS.items():
+            if data.get(section, {}).get(key, default) == default:
+                data.get(section, {}).pop(key, None)
+        text = json.dumps(data, sort_keys=True, default=str)
         return hashlib.sha256(text.encode()).hexdigest()[:16]
 
 
@@ -351,6 +369,9 @@ class Score(BaseModel):
     window_flag: bool = False
     steps_missing: int = 0
     steps_unexpected: int = 0
+    violation_steps: list[dict[str, Any]] | None = None
+    """Steps more than the tolerance above a group limit (group, period, phase,
+    utilisation), inherited ones included; None in scores from before it was kept."""
     checks: dict[str, Any] = Field(default_factory=dict)
     notes: list[str] = Field(default_factory=list)
 
@@ -393,12 +414,18 @@ class Evaluation(BaseModel):
 
     @property
     def spent(self) -> int:
-        """Runs this evaluation has started or is about to start."""
-        if self.reuse_task or self.shared_from:
+        """Runs this evaluation has started or is about to start: attempts that followed
+        another study's run are not counted."""
+        if self.reuse_task:
             return 0
-        if self.status == "skipped" and self.group_id is None and self.task_id is None:
-            return self.attempt - 1
-        return self.attempt
+        past = sum(1 for h in self.history if not h.get("shared_from"))
+        unstarted = self.status == "skipped" and self.group_id is None and self.task_id is None
+        return past + (0 if self.shared_from or unstarted else 1)
+
+    @property
+    def failed_runs(self) -> set[str]:
+        """Task and group ids of the earlier attempts' runs."""
+        return {str(h[k]) for h in self.history for k in ("task_id", "group_id") if h.get(k)}
 
     @property
     def label(self) -> str:
@@ -656,7 +683,8 @@ class StudyState(BaseModel):
     ) -> None:
         """A task's status. A failed run is retried when the failure is an
         infrastructure one (or unknown), attempts and budget allow; a model failure or
-        a cancelled run is infeasible."""
+        a cancelled run is infeasible. Up to :data:`LICENCE_WAIVER` attempts that found
+        no OpenServer licence don't count against ``max_attempts``."""
         ev = self.get(eid)
         status = str(task.get("status"))
         ev.task_id = task.get("task_id") or ev.task_id
@@ -672,25 +700,51 @@ class StudyState(BaseModel):
         ev.failure = f"{category or 'unknown'}: {message}".strip().rstrip(":")
         retryable = status == FAILED and (category is None or category in RETRYABLE_FAILURES)
         budget_left = ev.stage == "confirm" or self.remaining() >= 1
-        if retryable and ev.attempt < self.spec.budget.max_attempts and budget_left:
-            ev.history.append(
-                {
-                    "attempt": ev.attempt,
-                    "task_id": ev.task_id,
-                    "group_id": ev.group_id,
-                    "status": status,
-                    "failure": ev.failure,
-                    "at": when,
-                }
-            )
-            ev.attempt += 1
-            ev.status, ev.task_id, ev.group_id, ev.task_status = "proposed", None, None, None
-            ev.shared_from = None
-            self._note("retry", now, id=eid, attempt=ev.attempt, failure=ev.failure)
+        no_licence = [h for h in ev.history if NO_LICENCE.search(str(h.get("failure") or ""))]
+        waived = min(len(no_licence) + bool(NO_LICENCE.search(ev.failure)), LICENCE_WAIVER)
+        if retryable and ev.attempt - waived < self.spec.budget.max_attempts and budget_left:
+            self._retry(ev, status, when, now)
             return
         what = "cancelled" if status == CANCELLED else f"failed ({ev.failure})"
         ev.status, ev.finished_at = "scored", when
         ev.score = Score(feasible=False, reasons=[f"run {what}"])
+
+    def _retry(
+        self, ev: Evaluation, status: str, when: str, now: dt.datetime | None, event: str = "retry"
+    ) -> None:
+        entry = {
+            "attempt": ev.attempt,
+            "task_id": ev.task_id,
+            "group_id": ev.group_id,
+            "status": status,
+            "failure": ev.failure,
+            "at": when,
+        }
+        if ev.shared_from:
+            entry["shared_from"] = ev.shared_from
+        ev.history.append(entry)
+        ev.attempt += 1
+        ev.status, ev.task_id, ev.group_id, ev.task_status = "proposed", None, None, None
+        ev.shared_from = None
+        self._note(event, now, id=ev.id, attempt=ev.attempt, failure=ev.failure)
+
+    def revive(self, eid: str, now: dt.datetime | None = None) -> Evaluation:
+        """Try an evaluation whose run failed or was cancelled once more, past
+        ``max_attempts``: when the failure was not the evaluation's own (no licence, a
+        lost node, a shared run). The study waits for it; it is confirmed on the
+        confirmation grid if it ranks among the best."""
+        ev = self.get(eid)
+        if self.finished:
+            raise ValueError(f"the study has finished ({self.stop_reason}): start a new one")
+        if ev.status != "scored" or ev.task_status not in (FAILED, CANCELLED):
+            raise ValueError(
+                f"{eid} has no failed run to try again (status {ev.status}, run {ev.task_status})"
+            )
+        if ev.stage != "confirm" and self.remaining() < 1:
+            raise ValueError(f"the study's budget is spent ({self.committed()} runs)")
+        self._retry(ev, ev.task_status, _iso(now or now_utc()), now, event="revived")
+        ev.score, ev.finished_at = None, None
+        return ev
 
     def record_score(self, eid: str, score: Score) -> None:
         ev = self.get(eid)
@@ -822,6 +876,7 @@ class StudyState(BaseModel):
                     ),
                     "source": ev.source,
                     "shared_from": ev.shared_from,
+                    "inherited": int(s.checks.get("inherited_violations") or 0) if s else 0,
                     **{f"theta.{k}": v for k, v in (ev.theta or {}).items()},
                 }
             )
@@ -1051,6 +1106,8 @@ class StudyState(BaseModel):
         search, confirm = self.spec.fidelity.search, self.spec.fidelity.confirm
         if confirm == search:
             return True
+        if any(not ev.done for ev in self.evaluations if ev.stage != "confirm"):
+            return False  # a search run tried again (revive): confirm once it is in
         ids = self.stage_ids.get("confirm")
         if ids is None:
             evs: list[Evaluation | None] = []
@@ -1080,6 +1137,21 @@ class StudyState(BaseModel):
                     )
                 )
             ids = self.stage_ids["confirm"] = [ev.id for ev in evs if ev is not None]
+        else:
+            for top in self.best(search, self.spec.budget.confirm):
+                if self.find(confirm, theta=top.theta, candidate=top.candidate) is not None:
+                    continue
+                late = self._ensure(
+                    "confirm",
+                    confirm,
+                    case=top.case,
+                    theta=top.theta,
+                    candidate=top.candidate,
+                    source=top.id,
+                )
+                if late is not None:
+                    ids.append(late.id)
+                    self._note("late_confirm", id=late.id, source=top.id)
         return self._ids_done(ids)
 
 
@@ -1272,6 +1344,21 @@ def score_results(
         base = pd.Series(comparator.by_period)
         base.index = pd.to_datetime(base.index)
         gain = by_period.sub(base, fill_value=0.0)
+    tol = spec.constraints.violation_tol
+    over = feasibility.violation_steps(violations, tol)
+    allowed = None
+    if spec.constraints.inherit_violations and violations is not None:
+        if ev.base or ev.reference is not None:
+            allowed = over
+        elif comparator is not None and comparator.violation_steps is not None:
+            allowed = pd.DataFrame(
+                comparator.violation_steps, columns=[*feasibility.STEP_KEY, "utilisation"]
+            )
+        elif comparator is not None and not over.empty:
+            notes.append(
+                "the base's violations were not recorded, so none are inherited "
+                "(`tiein optimise rescore`)"
+            )
     f = feasibility.check(
         ev.id,
         status=status,
@@ -1280,8 +1367,16 @@ def score_results(
         violations=violations,
         log_lines=log_lines,
         gain_by_period=gain,
-        tol=spec.constraints.violation_tol,
+        tol=tol,
+        allowed=allowed,
     )
+    if f.inherited:
+        where = (
+            "in the model as given (M4)"
+            if ev.base or ev.reference is not None
+            else "where the base is too, by no less (M4)"
+        )
+        notes.append(f"{f.inherited} step(s) above a group limit {where}: not held against it")
     reasons = f.reasons()
     if unexpected:
         reasons.append(
@@ -1306,6 +1401,12 @@ def score_results(
         window_flag=f.window_flag,
         steps_missing=f.missing,
         steps_unexpected=len(unexpected),
+        violation_steps=None
+        if violations is None
+        else [
+            {**r, "period": pd.Timestamp(r["period"]).date().isoformat()}
+            for r in over.to_dict("records")
+        ],
         checks=f.as_dict(),
         notes=notes,
     )

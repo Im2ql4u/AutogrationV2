@@ -25,6 +25,7 @@ import httpx
 import pandas as pd
 import yaml
 
+from alvheim_tiein.auth import SignInError
 from alvheim_tiein.client import FINAL, AutogrationClient, AutogrationError, step_results_frame
 from alvheim_tiein.config import STUDY_ROOT, ConfigError, Settings
 from alvheim_tiein.prepare import PrepareError
@@ -1178,6 +1179,10 @@ def _print_status(state: Any) -> None:
     cols = ["id", "stage", "fidelity", "what", "status", "task_status", "objective", "feasible"]
     shown = table[cols + ["reasons"]].copy()
     shown["objective"] = shown["objective"].map(lambda v: "" if pd.isna(v) else f"{v:,.0f}")
+    noted = (shown["reasons"] == "") & (table["inherited"] > 0)
+    shown.loc[noted, "reasons"] = table.loc[noted, "inherited"].map(
+        lambda n: f"note: {n} step(s) over a limit as in the base"
+    )
     shown["reasons"] = shown["reasons"].str.slice(0, 60)
     print(shown.fillna("").to_string(index=False))
 
@@ -1200,6 +1205,9 @@ def cmd_optimise_step(args: argparse.Namespace, settings: Settings, paths: Paths
     from alvheim_tiein.optimise import runner as rn
 
     names = list(dict.fromkeys(args.name))
+    if args.watch and hasattr(sys.stdout, "reconfigure"):
+        # A watch usually writes to a log file; flush each line so the log is live.
+        sys.stdout.reconfigure(line_buffering=True)
     scoped = {name: _study_scope(args, settings, paths, name) for name in names}
     scope = scoped[names[0]][0]
     with AutogrationClient.from_env(scope.settings) as api:
@@ -1213,7 +1221,7 @@ def cmd_optimise_step(args: argparse.Namespace, settings: Settings, paths: Paths
                 try:
                     if _step_study(name, study, backend, scoped[name][1], args.dry_run):
                         finished.add(name)
-                except (httpx.TransportError, AutogrationError) as e:
+                except (httpx.TransportError, AutogrationError, SignInError) as e:
                     if not (args.watch and _transient(e)):
                         raise
                     print(f"  {name}: {e}; trying again next round", file=sys.stderr)
@@ -1226,7 +1234,8 @@ def cmd_optimise_step(args: argparse.Namespace, settings: Settings, paths: Paths
 
 
 def _transient(e: Exception) -> bool:
-    """Errors a watch rides out: the network, the gateway, throttling, an expired token."""
+    """Errors a watch rides out: the network, the gateway, throttling, an expired token,
+    sign-in while the machine is offline (asleep)."""
     if isinstance(e, AutogrationError):
         return e.status >= 500 or e.status in (401, 408, 429)
     return True
@@ -1329,6 +1338,44 @@ def cmd_optimise_report(args: argparse.Namespace, settings: Settings, paths: Pat
             for note in notes:
                 print(f"  note: {note}")
     print(f"\nwrote {', '.join(written)} to {sp.report}")
+    return 0
+
+
+def cmd_optimise_rescore(args: argparse.Namespace, settings: Settings, paths: Paths) -> int:
+    from alvheim_tiein.optimise import runner as rn
+
+    names = list(dict.fromkeys(args.name))
+    scoped = {name: _study_scope(args, settings, paths, name) for name in names}
+    scope = scoped[names[0]][0]
+    with AutogrationClient.from_env(scope.settings) as api:
+        backend = rn.ApiBackend(api)
+        for name in names:
+            study = _open_study(scope, paths, name, api)
+            s = study.state
+            before = {ev.id: s.effective(ev) for ev in s.evaluations}
+            ids = study.rescore(backend)
+            print(f"{name}: rescored {len(ids)} run(s)")
+            for eid in ids:
+                (old, was), (new, now) = before[eid], s.effective(s.get(eid))
+                if was != now or old != new:
+                    value = "" if new is None else f", objective {new:,.0f}"
+                    print(f"  {eid}: feasible {was} -> {now}{value}")
+            _print_outcome(s)
+    return 0
+
+
+def cmd_optimise_retry(args: argparse.Namespace, settings: Settings, paths: Paths) -> int:
+    scope, _ = _study_scope(args, settings, paths)
+    with AutogrationClient.from_env(scope.settings) as api:
+        study = _open_study(scope, paths, args.name, api)
+        try:
+            revived = study.revive(args.ids)
+        except (KeyError, ValueError) as e:
+            raise ProjectError(f"{args.name}: {e}") from e
+    for ev in revived:
+        after = ev.history[-1]["failure"]
+        print(f"{args.name} {ev.id}: attempt {ev.attempt} queued (after {after})")
+    print(f"the next `tiein optimise step {args.name}` submits or shares them")
     return 0
 
 
@@ -1800,6 +1847,26 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--dry-run", action="store_true", help="write the next wave's requests only")
     s.add_argument("--watch", type=int, metavar="SECONDS", help="repeat until the studies end")
     s.set_defaults(fn=cmd_optimise_step)
+    s = scoped(
+        osub.add_parser(
+            "rescore",
+            help="score a study's completed runs again from cached results (stop its watch first)",
+        ),
+        adhoc=False,
+    )
+    s.add_argument("name", nargs="+")
+    s.set_defaults(fn=cmd_optimise_rescore)
+    s = scoped(
+        osub.add_parser(
+            "retry",
+            help="run evaluations whose runs failed once more, past max_attempts "
+            "(stop the study's watch first)",
+        ),
+        adhoc=False,
+    )
+    s.add_argument("name")
+    s.add_argument("ids", nargs="+", metavar="EID", help="evaluations, e.g. e003")
+    s.set_defaults(fn=cmd_optimise_retry)
     for name, text, fn in (
         ("status", "evaluations of a study so far (offline)", cmd_optimise_status),
         ("report", "write the study's report tables and settlement", cmd_optimise_report),

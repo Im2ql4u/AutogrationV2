@@ -5,6 +5,21 @@ Newest first. Run ids are on **test** unless marked; full ids are in the toolkit
 
 ## 19 Nov 2026
 
+- **Evening: study fixes (T14–T16).**
+  - The watcher survives an offline sign-in (T14).
+  - The monthly base has Boyla+Frosk liquid over its booking in three months (M4), which
+    made every monthly confirmation infeasible. A run's step over a limit no longer
+    counts when the base has the same step over (T15). New `tiein optimise rescore`; the
+    four w1 studies were rescored, and only the monthly base of restructure-w1 changed.
+  - A shared MH run that found no OpenServer licence was followed again instead of run
+    again, so settle-w1 e003 (neutral weights), soften-w1 e003 and outer-w1 e005 failed
+    without a second run (T16). Fixed; licence failures no longer use up attempts. New
+    `tiein optimise retry`. The three were retried at 16:07 as one new run (settle-w1
+    e003 a3, the other two follow it). The confirm stages wait for it and confirm it if
+    it ranks.
+  - The toolkit has 238 tests. The watcher runs as `study-watch-7`.
+- **Results run picker pushed** (`7d0dde6`, P11): the old index styles are removed. No
+  PR yet.
 - **Afternoon: projects dropped.**
   - The decision is to compare runs by picking them in Results, with a deliberate
     baseline, instead of keeping projects in Autogration.

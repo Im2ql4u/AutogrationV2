@@ -33,6 +33,10 @@ class StaticToken:
         return self._token
 
 
+class SignInError(RuntimeError):
+    """No token: the sign-in service was unreachable, or the cached sign-in has lapsed."""
+
+
 class CredentialToken:
     """Caches an azure-identity access token until shortly before it expires."""
 
@@ -43,7 +47,12 @@ class CredentialToken:
 
     def __call__(self) -> str:
         if self._token is None or self._token.expires_on - _REFRESH_MARGIN_S < time.time():
-            self._token = self._credential.get_token(self._scope)
+            from azure.core.exceptions import ClientAuthenticationError
+
+            try:
+                self._token = self._credential.get_token(self._scope)
+            except ClientAuthenticationError as e:
+                raise SignInError(f"sign-in failed: {e.message or e}") from e
         return self._token.token
 
 

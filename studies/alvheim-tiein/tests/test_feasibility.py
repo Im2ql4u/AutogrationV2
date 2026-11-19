@@ -61,3 +61,31 @@ def test_infeasible_reasons() -> None:
     assert "status Failed" in f.reasons()[0]
     assert "gain mostly in the M3 window" in f.badges()
     assert len(fe.table([f])) == 1
+
+
+def test_violations_the_comparator_has_too_are_inherited() -> None:
+    def steps(*rows: tuple[str, str, float]) -> pd.DataFrame:
+        return pd.DataFrame(
+            [{"group": g, "period": p, "phase": "liquid", "utilisation": u} for g, p, u in rows]
+        )
+
+    base = fe.violation_steps(steps(("BF", "2030-10-01", 1.136), ("BF", "2030-12-01", 1.01)))
+    assert len(base) == 1 and base.loc[0, "period"] == pd.Timestamp("2030-10-01")
+    run = steps(
+        ("BF", "2030-10-01", 1.15),  # as in the base, within 2 points
+        ("BF", "2030-12-01", 1.05),  # the base is within its limit here
+        ("TY", "2030-10-01", 1.10),  # another group
+    )
+    f = fe.check("S3", status="Completed", violations=run, allowed=base)
+    assert f.inherited == 1 and f.violations == 2 and round(f.worst_violation, 6) == 0.10
+    assert "1 step(s) over a limit as in the base" in f.badges()
+    assert f.as_dict()["inherited_violations"] == 1
+
+    worse = fe.check(
+        "S4", status="Completed", violations=steps(("BF", "2030-10-01", 1.2)), allowed=base
+    )
+    assert worse.inherited == 0 and worse.violations == 1
+    assert fe.violation_steps(None).empty and list(fe.violation_steps(None)) == [
+        *fe.STEP_KEY,
+        "utilisation",
+    ]
