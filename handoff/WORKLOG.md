@@ -5,6 +5,23 @@ Newest first. Run ids are on **test** unless marked; full ids are in the toolkit
 
 ## 19 Nov 2026
 
+- **Late: PRs for the picker and the unit fix.**
+  - The picker shows its listing as a list or as cards (the old Results index's boxes;
+    an expanded simulation shows its runs as tiles). Both views share the selection
+    rules; the choice is remembered (`7db550a`).
+  - A flaky picker test (the example study's `createdAt` came from the clock) now
+    freezes the clock.
+  - `development` merged into both branches (no conflicts). Opened
+    AkerBP/autogration_frontend#172 (unit fix, 393 tests) and
+    AkerBP/autogration_frontend#173 (run picker, stacked on #172, 493 tests). #173
+    retargets to `development` once #172 merges; #165 closes once its visuals are on the
+    picker.
+  - Kristoffer merged the presets PRs (AkerBP/autogration#1102,
+    AkerBP/autogration_frontend#166) and linked assumptions (AkerBP/autogration#1105,
+    AkerBP/autogration_frontend#167). Test doesn't serve linked assumptions yet: no
+    preview route in its OpenAPI at 17:30.
+  - Studies at 17:20: outer-w1 has 8 screening points scored (best still e004, +660k);
+    the other three are in monthly confirmation. The watcher (`study-watch-7`) is alive.
 - **Evening: study fixes (T14–T16).**
   - The watcher survives an offline sign-in (T14).
   - The monthly base has Boyla+Frosk liquid over its booking in three months (M4), which

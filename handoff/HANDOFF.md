@@ -20,7 +20,7 @@ here have totals only.
 |---|---|---|
 | 0 – test runs | Check your runs, monthly single lifts, booking-period release, probes | **done** – errata in REPORT.md, compare.md and comparison.md; findings A1–A7, M1–M7 |
 | 1 – toolkit | Feasibility checks, levers, `tiein optimise`, ledgers, settlement, booking restructuring, MH grid | **built; studies running** – wave 1 started 19 Nov 09:17 |
-| 2 – Autogration PRs | ~~Optional projects~~ (dropped 19 Nov). Now: a Results run picker (pick runs across simulations, deliberate baseline, change baseline and runs in view inside Results), the unit fix, then the booking, settlement and frontier visuals on top of the picker | **in progress** – #1101 closed; picker and unit fix on branches, not yet PRs |
+| 2 – Autogration PRs | ~~Optional projects~~ (dropped 19 Nov). Now: a Results run picker (pick runs across simulations, deliberate baseline, change baseline and runs in view inside Results), the unit fix, then the booking, settlement and frontier visuals on top of the picker | **in progress** – #1101 closed; unit fix AkerBP/autogration_frontend#172 and run picker AkerBP/autogration_frontend#173 (stacked on #172) open for review |
 | 3 – Autogration PRs | Optimisation module inside Autogration: server-side study driver (state machines, leased driver, attempts), scheme presets, shared economics, pinned reference sets, an Optimise tab | not started; done when the phase 1 study re-run server-side gives the same answer |
 | 4 – model | A real Froskelår switch (M1), date-based lookup (M2), oscillation fix (M3), limit violations (M4) | open – needs RESOLVE/IPM |
 
@@ -57,27 +57,30 @@ here have totals only.
   simulation, one `assumption_group_id`), and your `feature/linked-assumptions` branch
   lets one simulation hold exactly the cases wanted. So AkerBP/autogration#1101 is closed,
   and AkerBP/autogration_frontend#165 will be replaced (below).
-- **Results run picker** (`feature/results-run-picker` off `development`, frontend). Filters
-  like the Tasks page (asset, registered model, status, created by, time). Simulations
-  expand to their runs. Runs are picked with "+", a click, shift-click for a range, a
-  simulation's checkbox, or select all. Running or queued runs can be picked only when the
-  status filter includes them. One run is marked as the baseline on purpose; Compare
-  stays disabled until it is. Inside a comparison, the baseline and the runs in view can be
-  changed, and "Edit runs" reopens the picker. #165's booking, settlement and frontier
-  visuals move onto this selection afterwards.
+- **Results run picker** (AkerBP/autogration_frontend#173, `feature/results-run-picker`,
+  stacked on the unit fix). Filters like the Tasks page (asset, registered model, status,
+  created by, time). Simulations expand to their runs. Runs are picked with "+", a click,
+  shift-click for a range, a simulation's checkbox, or select all. Running or queued runs
+  can be picked only when the status filter includes them. The listing shows as a list or
+  as cards (the old Results index's boxes; an expanded simulation shows its runs as
+  tiles), and the choice is remembered. One run is marked as the baseline on purpose;
+  Compare stays disabled until it is. Inside a comparison, the baseline and the runs in
+  view can be changed, and "Edit runs" reopens the picker. #165's booking, settlement and
+  frontier visuals move onto this selection afterwards.
 - **Unit bug** (P10). GAP writes gas rates as `1000Sm3/d`, but the Results page and the
   results workbench only knew `Sm3/d`, so gas rates were 1000× too low there. The toolkit's
-  own reader was right, so the study numbers are not affected. Fixed on
-  `fix/results-units` (frontend) and in `results-workbench` (this repo); neither is
-  pushed yet.
-- **Presets PRs** AkerBP/autogration#1102 and AkerBP/autogration_frontend#166 are back to
-  draft. Your linked-assumptions presets store the whole spec, including
-  `dataobject_tables`, and both add a migration 0023, so ours are probably superseded.
+  own reader was right, so the study numbers are not affected. Fixed in
+  AkerBP/autogration_frontend#172 (`fix/results-units`) and in `results-workbench` (this
+  repo).
+- **Presets PRs** AkerBP/autogration#1102 and AkerBP/autogration_frontend#166: you merged
+  both on 19 Nov, along with linked assumptions (AkerBP/autogration#1105,
+  AkerBP/autogration_frontend#167).
 - **Linked assumptions tested offline on Alvheim** (next section).
 
-## Linked assumptions on Alvheim (`feature/linked-assumptions`, tested offline)
+## Linked assumptions on Alvheim (merged 19 Nov, not yet on test)
 
-The branch isn't on test yet (`/simulate/preview` returns 404), so its case builder
+The branch is merged to `development`, but test doesn't serve it yet: at 17:30 on 19 Nov
+its OpenAPI had no preview route (`/simulate/preview` returns 404). So its case builder
 (`build_compute_set`, `preview_simulation`) was run locally against the fixed model's tree
 (`GET /models/01a1e49f…/tree`). The toolkit's new `alvheim_tiein.linked.combine` turns
 several single-run requests into one request with one link, `case`, whose options are the
@@ -106,17 +109,18 @@ does).
 |---|---|---|---|
 | AkerBP/autogration#1101 | `feature/optional-projects` | Optional projects | **closed** 19 Nov: projects dropped |
 | AkerBP/autogration_frontend#165 | `feature/results-projects` | Results project mode with booking, settlement and frontier visuals | open, to be replaced by the run picker plus these visuals; Copilot's round-2 comments (3) not fixed |
-| AkerBP/autogration#1102 + AkerBP/autogration_frontend#166 | `feature/preset-dataobject-tables` | Presets also store DataObject table edits | **draft**: probably superseded by linked-assumptions presets. #166 has both round-2 Copilot fixes pushed (`2efc4ba`) |
-| frontend, not yet a PR | `feature/results-run-picker` | Results run picker (above) | pushed (`8761953`, `7d0dde6`), checked in the browser against test; no PR yet |
-| frontend, not yet a PR | `fix/results-units` | `1000Sm3/d` and other multiplier units on the Results page (P10) | done locally (`8078e56`, 329 tests); not pushed |
+| AkerBP/autogration#1102 + AkerBP/autogration_frontend#166 | `feature/preset-dataobject-tables` | Presets also store DataObject table edits | **merged** 19 Nov |
+| AkerBP/autogration_frontend#172 | `fix/results-units` | `1000Sm3/d` and other multiplier units on the Results page (P10) | **open**; `development` merged in, 393 tests |
+| AkerBP/autogration_frontend#173 | `feature/results-run-picker` → `fix/results-units` | Results run picker, list or cards (above) | **open**, stacked on #172; 493 tests; checked in the browser against test |
 | merged 15 Nov | – | #1076 (archive names with brackets), #1077 (fetch missing files before validation), #1079, frontend #138 (Results section) | merged |
 
 Where an agent should look hardest:
 
-- **Run picker** (once it is a PR): the selection rules (shift-range, a simulation's runs,
+- **Run picker** (#173): the selection rules (shift-range, a simulation's runs,
   select all only over runs the status filter allows), that the baseline is never
   implicit, and that old `compare~…` links still open. Its logic is in pure, tested
-  helpers. There are no DOM tests (Vitest runs without jsdom), so clicks and keyboard
+  helpers, and the list and card views share it (cards keep the list's order, so ranges
+  match). There are no DOM tests (Vitest runs without jsdom), so clicks and keyboard
   need a manual look.
 - **Unit fix**: `toSi` reads a leading multiplier (`1000`, `1E3`, `e3`, `10^3`) and
   falls back to a case-insensitive match. Since case is ignored, `mW` would read as `MW`.
@@ -159,7 +163,7 @@ enough on this model (A3).
 **Timing.** MH runs take about 2 h, so the first candidate waves start late morning on
 19 Nov. Monthly confirmations take 6–7 h each.
 
-**Status, 19 Nov 16:07.** Every study except outer-w1 has reached monthly confirmation;
+**Status, 19 Nov 17:20.** Every study except outer-w1 has reached monthly confirmation;
 outer-w1 is still screening. Values in Sm3 oe:
 
 - base: 22.33 M on MH and 21.94 M monthly (M BASE, reused);
@@ -167,8 +171,8 @@ outer-w1 is still screening. Values in Sm3 oe:
 
 | Study | Best on MH so far | Runs used | Now |
 |---|---|---|---|
-| soften-w1 | α=0, β=1: 22.76 M (+429k) | 8 of 14 | three monthly confirmations running; e003 again (shared) |
-| outer-w1 | α=0, β=0.5, γ=1.2: 22.99 M (+660k) | 6 of 30 | screening; e005 again (shared). Three screening points are infeasible (liquid +28 % to +61 % over a booking) |
+| soften-w1 | α=0, β=1: 22.76 M (+429k) | 7 of 14 | three monthly confirmations running; e003 again (shared) |
+| outer-w1 | α=0, β=0.5, γ=1.2: 22.99 M (+660k) | 6 of 30 | screening (8 points scored); e005 again (shared). Three screening points are infeasible (liquid +28 % to +61 % over a booking) |
 | settle-w1 | release bookings: 22.27 M (−59k) | 6 of 8 | two monthly confirmations running; neutral weights (e003) again |
 | restructure-w1 | R4 pro rata: 22.39 M (+54k) | 4 of 10 | two monthly confirmations running |
 
