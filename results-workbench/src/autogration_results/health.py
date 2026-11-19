@@ -11,7 +11,7 @@ import pandas as pd
 import yaml
 from pydantic import BaseModel
 
-from autogration_results.contract import COMPLETED, SENTINEL_ABS, UNIT_TO_SI
+from autogration_results.contract import COMPLETED, SENTINEL_ABS
 from autogration_results.engine import ResultStore
 
 SEVERITY_ORDER = {"critical": 0, "warning": 1, "info": 2}
@@ -116,19 +116,18 @@ def run_checks(store: ResultStore, config: HealthConfig | None = None) -> pd.Dat
             WHERE r.value IS NULL GROUP BY ALL"""
         ).df()
     )
-    known = list(UNIT_TO_SI)
     frames.append(
         con.execute(
-            f"""SELECT 'info', 'unknown_unit', NULL, NULL, NULL, string_agg(DISTINCT property_name, ', '), NULL::DATE, count(*),
-                   'unit ' || unit
-            FROM raw_results WHERE unit IS NOT NULL AND unit NOT IN ({', '.join('?' * len(known))})
-            GROUP BY unit""",
-            known,
+            """SELECT 'info', 'unknown_unit', NULL, NULL, NULL, string_agg(DISTINCT r.property_name, ', '), NULL::DATE,
+                   count(*), 'unit ' || r.unit
+            FROM raw_results r JOIN units u ON r.unit = u.unit WHERE NOT u.known
+            GROUP BY r.unit"""
         ).df()
     )
 
-    out = pd.concat([f.set_axis(COLUMNS, axis=1) for f in frames if not f.empty], ignore_index=True)
-    if out.empty:
+    found = [f.set_axis(COLUMNS, axis=1) for f in frames if not f.empty]
+    if not found:
         return pd.DataFrame(columns=COLUMNS)
+    out = pd.concat(found, ignore_index=True)
     out["_o"] = out.severity.map(SEVERITY_ORDER)
     return out.sort_values(["_o", "check", "run_number", "identifier"]).drop(columns="_o").reset_index(drop=True)

@@ -20,7 +20,7 @@ from autogration_results.contract import (
     ENTITY_RESERVED,
     RESULT_COLUMNS,
     SENTINEL_ABS,
-    UNIT_TO_SI,
+    to_si,
 )
 from autogration_results.measures import Measure, MeasureRegistry, Term
 
@@ -101,14 +101,19 @@ class ResultStore:
 
     def _prepare(self) -> None:
         con = self.con
-        units = pd.DataFrame([(u, si, f) for u, (si, f) in UNIT_TO_SI.items()], columns=["unit", "si_unit", "factor"])
+        # Resolve each distinct native unit once; the join then needs only exact strings.
+        present = [u for (u,) in con.execute("SELECT DISTINCT unit FROM raw_results WHERE unit IS NOT NULL").fetchall()]
+        units = pd.DataFrame(
+            [(u, *to_si(u)) for u in present], columns=["unit", "si_unit", "factor", "si_offset", "known"]
+        ).astype({"unit": "string", "si_unit": "string", "factor": "float64", "si_offset": "float64", "known": "bool"})
         con.register("_units", units)
         con.execute("CREATE OR REPLACE TABLE units AS SELECT * FROM _units")
         con.unregister("_units")
         con.execute(
             f"""CREATE OR REPLACE VIEW results_si AS
             SELECT r.*, coalesce(u.si_unit, r.unit) AS unit_si,
-                   CASE WHEN abs(r.value) >= {SENTINEL_ABS} THEN NULL ELSE r.value * coalesce(u.factor, 1) END AS value_si
+                   CASE WHEN abs(r.value) >= {SENTINEL_ABS} THEN NULL
+                        ELSE r.value * coalesce(u.factor, 1) + coalesce(u.si_offset, 0) END AS value_si
             FROM raw_results r LEFT JOIN units u ON r.unit = u.unit"""
         )
         self._prepare_cases()
