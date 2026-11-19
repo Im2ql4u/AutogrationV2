@@ -195,6 +195,11 @@ uv run tiein optimise cancel settle-w1
 - **Watching.** `step --watch` rides out gateway errors and expired tokens. To keep a
   log, set `PYTHONUNBUFFERED=1` and redirect the output; the VS Code tasks **Study:
   optimise watch (all studies)** and **Study: optimise watch log** do this.
+- **Linked simulations (not used yet).** `alvheim_tiein.linked.combine(bodies, name=...)`
+  turns single-run requests into one request with a link whose options are the
+  requests, for Autogration's linked assumptions (`feature/linked-assumptions`). The
+  cases then share one simulation in Results. `linked.case_count` counts the runs of a
+  request with links. Studies still submit one simulation per evaluation.
 
 ## Reference data (`data/reference`)
 

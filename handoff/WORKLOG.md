@@ -5,6 +5,33 @@ Newest first. Run ids are on **test** unless marked; full ids are in the toolkit
 
 ## 19 Nov 2026
 
+- **Afternoon: projects dropped.**
+  - The decision is to compare runs by picking them in Results, with a deliberate
+    baseline, instead of keeping projects in Autogration.
+  - AkerBP/autogration#1101 closed. AkerBP/autogration#1102 and
+    AkerBP/autogration_frontend#166 set back to draft, as linked-assumptions presets
+    store the whole spec.
+  - #166 got its two round-2 Copilot fixes (`2efc4ba`) before the stop.
+  - The other paused round-2 edits are stashed in the `be-projects`/`fe-projects`
+    worktrees.
+- **Results run picker** started on `feature/results-run-picker` (frontend, off
+  `development`). See HANDOFF.
+- **Unit bug found and fixed (P10).**
+  - Alvheim results carry gas rates in `1000Sm3/d` (4.26 M rows). The Results page
+    (`units.ts`) and the results workbench (`contract.py`) only knew `Sm3/d`, so they read
+    gas rates 1000× too low.
+  - Frontend fix `8078e56` on `fix/results-units`: 329 tests pass.
+  - Workbench fix `1579d34` in this repo: 140 unit tests.
+  - Not pushed yet.
+  - The toolkit's own reader was right, so the study scores are unaffected.
+- **Linked assumptions tested offline on Alvheim (T13, P12).**
+  - New `alvheim_tiein.linked.combine` (9 tests).
+  - Kristoffer's case builder was run locally on the fixed model's tree, on the
+    project cases and on the restructure-w1 and soften-w1 waves: 19 of 19 cases equal
+    their single runs, cell order aside.
+  - A Froskelår off/on × scheme matrix with `exclude_cases` also builds correctly, once
+    one overlap is removed (P12).
+  - The toolkit has 231 tests.
 - **PR review comments fixed.**
   - AkerBP/autogration#1101 (optional projects): all 6 Copilot comments fixed with tests and
     answered. HEAD `6c49d3b7`; 1563 backend tests pass. Marked ready, Copilot review

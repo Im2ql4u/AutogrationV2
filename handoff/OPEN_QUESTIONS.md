@@ -68,9 +68,25 @@ matters, and where it is tracked. IDs refer to [ISSUES.md](../ISSUES.md) and
 17. **The FPSO water limit.** It binds 2028–2034, and that is where tie-back water
     displaces host wells. Is water capacity (or its allocation) in scope as a lever, or
     fixed? (A7)
-18. **Presets with schedules.** The presets change stores DataObject table edits. Should
-    presets also carry schedule assumptions (WELL_OFF), so the switch is fully one preset
-    in the app? (P9)
+18. **Presets with schedules.** Answered by `feature/linked-assumptions`: its presets
+    store assumptions (WELL_OFF schedules included) and the whole spec, DataObject cells
+    included. Open part: once that is merged, close AkerBP/autogration#1102 and
+    AkerBP/autogration_frontend#166 (now drafts), or is anything in them still wanted?
+    (P9)
 19. **Where the optimiser lives.** The studies run from the toolkit around Autogration.
     Phase 3 moves the driver into Autogration (leased driver, Optimise tab). Is that
-    wanted, and should it wait for the phase 1 results? (research/22 phases)
+    wanted, and should it wait for the phase 1 results?
+20. **Conflicts between links and `exclude_cases`.** Linked assumptions reject two items
+    on different links that write the same cell, even when `exclude_cases` removes every
+    combination where both apply (Froskelår off × R3 cap). Should the conflict check
+    respect exclusions? The workaround is one link with an option per wanted case. (P12)
+21. **VMs for a linked simulation.** A linked wave of 6–10 cases, or a Froskelår ×
+    scheme matrix, is one simulation. Does it start all its cases at once? Our cap is
+    40–50 VMs; can a simulation limit how many of its cases run at once? (P4)
+22. **Re-running one case of a linked simulation.** The study driver re-submits a failed
+    evaluation. Within a linked simulation, can one failed case be re-run into the same
+    group, or does the retry become a separate simulation? (T13)
+23. **Pushing the unit fix.** The frontend fix (`fix/results-units`) and the workbench
+    fix are ready. Open a frontend PR to `development` now, and push the workbench fix to
+    this repo? Also, GAP reports `CumGas` in `MSm3`, while the workbench's source table
+    assumes `GSm3`. Which is right for Alvheim's exports? (P10) (research/22 phases)
