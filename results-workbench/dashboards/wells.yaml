@@ -1,0 +1,66 @@
+spec_version: 1
+id: wells
+order: 50
+title: Wells and groups
+question: What is each well and well group doing?
+description: Focus case unless stated. Replaces Tech Profiles, Stacked Wells, Wells and WCT/GOR pages.
+sections:
+  - title: Contribution
+    visuals:
+      - id: oil_by_well
+        type: area
+        title: Oil rate by well (top 10)
+        measure: oil_rate
+        color: identifier
+        cases: focus
+        top_n: 10
+        width: 6
+      - id: volume_heatmap
+        type: heatmap
+        title: Oil equivalent volume by well and year
+        measure: oe_volume
+        color: identifier
+        grain: year
+        cases: focus
+        width: 6
+  - title: Well behaviour
+    visuals:
+      - id: wct_by_well
+        type: line
+        measure: wct
+        color: identifier
+        cases: focus
+        grain: quarter
+        top_n: 8
+        width: 6
+      - id: gor_by_group
+        type: line
+        measure: gor
+        color: entity.group
+        cases: focus
+        grain: quarter
+        width: 6
+      - id: pressure_by_group
+        type: line
+        measure: reservoir_pressure
+        color: entity.group
+        cases: focus
+        width: 6
+      - id: whp_by_group
+        type: line
+        measure: wellhead_pressure
+        color: entity.group
+        cases: focus
+        width: 6
+  - title: Well table
+    visuals:
+      - id: well_totals
+        type: table
+        rows: [entity.field, entity.group, identifier]
+        cases: focus
+        measures: [oil_volume, gas_volume, water_volume, water_injection_volume, oe_volume_mmboe]
+      - id: wells_note
+        type: note
+        note: |
+          TODO(engineer): Power BI also shows drilling schedule (first production date per well),
+          type curves (rate vs cumulative) and VLP ranges. Add when you know which of these you use.

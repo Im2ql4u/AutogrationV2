@@ -1,7 +1,9 @@
-# Decision Studies Vision And First Plans
+# Decision Studies Vision And Vision Branches
 
-Status: planning document. This defines a direction and acceptance gates; it
-does not authorize product code or financial recommendations yet.
+Status: vision document. These are capability branches, not a committed
+execution sequence, calendar, backlog, or authorization for product code or
+financial recommendations. Detailed priority and decision rights are captured
+in the companion pillar and decision documents.
 
 ## The Vision
 
@@ -44,6 +46,36 @@ Autogration needs explicit modes.
 
 This avoids a common failure mode: a fast sensitivity study accidentally being
 presented as a statistically defensible reserves or investment forecast.
+
+## Current Priority Posture
+
+The current direction is intentionally uneven. Not every vision branch deserves
+equal investment or attention now.
+
+1. **Pillar 1 first:** strengthen the existing product through small,
+  correctness-oriented improvements to case generation, provenance, guardrails,
+  and transparent reuse.
+2. **Reference corpus before narrowing:** analyze the existing Autogration run,
+   result, assumption, log, and CDF evidence across multiple assets and decision
+   archetypes. Do not prematurely choose one canonical decision type.
+3. **Conditional uncertainty outputs after the evidence is organized:** show distributions of flow, income,
+  value, or other KPIs only for study types with a declared probability or
+  weighted-realization basis. Other uncertainty work may remain scenario or
+  sensitivity analysis without probability labels.
+4. **Economics is postponed:** retain the gated Economic Decision Studies vision,
+   but do not make it a near-term focus or choose its first decision template
+   yet.
+5. **Smart queues before adaptive studies:** first add transparent operational
+   queueing and controlled case release for a fixed plan; only then add
+   result-driven, one-by-one adaptive study logic.
+6. **ML and AI later:** attach them after the preceding branches create trusted,
+  well-labeled data and validation contracts.
+7. **Multifidelity, subsystems, and native physics are long-term branches:**
+  retain their vision and research value, but do not let them displace the
+  current-product and decision-study foundations.
+
+The companion decision-rights document explains which parts of this posture are
+already agreed and which still require a product-owner or engineering decision.
 
 ## The Core Study Model
 
@@ -514,51 +546,56 @@ The sandbox earns a production role only when it meets predefined conservation,
 convergence, runtime, KPI-agreement, and decision-regret criteria on versioned
 benchmarks. Until then, it remains research.
 
-## First Plans
+## Vision Branches
 
-The plans are ordered by dependency, not by a calendar. Do not start the next
-one because time passed; start it when the previous exit criteria are met.
+The branches are described by dependency, not by a calendar. They explain what
+Autogration should eventually be able to establish and the evidence required
+before a branch becomes delivery work. They should not be read as a committed
+implementation order.
 
-### Plan 0: Golden Decision Pack - no code
+### Foundation Branch: Reference Corpus And Decision Landscape - no code
 
-**Goal:** choose one recurring real decision and make its current evidence
-reproducible using existing Autogration and RESOLVE capabilities.
+**Intended value:** organize and analyze the existing Autogration and RESOLVE
+evidence across multiple recurring decision types, without prematurely choosing
+one canonical decision.
 
-**Scope:** one asset, one registered model revision, one decision question, and
-one approved economics reference.
+**Scope:** historical and current task/result evidence available through
+Autogration, including multiple assets, model families, run types, and decision
+archetypes where provenance allows. Economics is explicitly out of scope here.
 
-**Work:**
+**What this branch needs to establish:**
 
-1. Write a decision charter: decision owner, alternatives, horizon, constraints,
-  consequences of a wrong answer, and success metric.
-2. Freeze a reference model/data fingerprint and capture existing RESOLVE run
-  settings, schedules, assumptions, and result locations.
-3. Build an input registry: target, unit, role, source, range/distribution,
-  dependency, owner, and review date for every input.
-4. Define a KPI dictionary: calculation formula, time aggregation, unit, data
-  source, and validation rule for each output.
-5. Run or collect a reference set of current full-engine cases, including
-  baseline, credible extremes, and known difficult/failed cases.
-6. Measure runtime decomposition: queue, archive/copy, model load, RESOLVE run,
-  result extraction, and human interpretation time.
-7. Reconcile one cashflow calculation against an economics-owned spreadsheet.
+1. Inventory task lineage, model references, assumptions, results, logs, CDF
+  ensemble references, and retention limits.
+2. Group evidence into candidate decision archetypes, including continue versus
+  shut in, intervention versus defer, drill versus no-drill, and other patterns
+  found in the corpus.
+3. Identify which model/run families are sufficiently complete to act as
+  references and which are incomplete, incomparable, or outside retention.
+4. Define a common technical KPI dictionary and quality vocabulary before any
+  cross-run comparison is trusted.
+5. Measure runtime decomposition: queue, archive/copy, model load, RESOLVE run,
+  result extraction, failures, and human interpretation time.
+6. Create a reference-case register containing baseline, credible extremes,
+  known failures, and representative outcomes for each viable archetype.
 
-**Deliverables:** decision charter, input registry, KPI dictionary, benchmark
-case pack, runtime report, economics reconciliation sheet, and explicit known
-limitations.
+**Deliverables:** evidence inventory, retention map, decision-archetype map,
+KPI dictionary, reference-case register, runtime/failure report, and explicit
+known limitations.
 
-**Exit gate:** an engineer can rerun the reference cases and explain why a case
-exists, what it means, and which assumptions can reverse the decision.
+**Evidence before this becomes delivery work:** several viable reference families
+are visible, their provenance/quality limits are understood, and engineers can
+explain why each reference case exists and what it can and cannot support.
 
-### Plan 1: Study Shell And Safe Compression
+### Branch: Study Shell And Safe Compression
 
-**Goal:** later create the smallest product vertical slice that turns a run batch
+**Intended value:** later create the smallest product vertical slice that turns a run batch
 into a versioned, inspectable study without changing RESOLVE execution.
 
 **Scope:** only discrete assumptions and current full RESOLVE tasks. No
 probabilistic claims, ML, subsystem cuts, or automatic recommendations.
 
-**Later implementation shape:**
+**What this branch should eventually establish:**
 
 - Introduce `Study`, immutable `StudyRevision`, `StudyCase`, and
   `CaseExecution` above the existing task model.
@@ -570,19 +607,19 @@ probabilistic claims, ML, subsystem cuts, or automatic recommendations.
 - Implement only exact reuse and declarative inactive-setting pruning.
 - Present study progress while retaining links to existing task detail pages.
 
-**Exit gate:** the Golden Decision Pack runs through the new shell with the same
+**Evidence before this becomes delivery work:** the Golden Decision Pack runs through the new shell with the same
 technical outcomes as the legacy flow, fewer duplicate/inactive cases, and full
 case provenance.
 
-### Plan 2: Uncertainty Forecast And Economic Gate
+### Branch: Uncertainty Forecast And Economic Gate
 
-**Goal:** produce a limited, reviewable uncertainty result for the Golden
+**Intended value:** produce a limited, reviewable uncertainty result for the Golden
 Decision Pack.
 
 **Scope:** one decision template; discrete weighted realizations plus triangular
 or uniform scalar inputs; seeded Latin hypercube; one economics template.
 
-**Work:**
+**What this branch needs to establish:**
 
 1. Add input classification and distribution/weight capture.
 2. Define realization bundles and common sampled drivers across decision arms.
@@ -592,19 +629,19 @@ or uniform scalar inputs; seeded Latin hypercube; one economics template.
   and failed-case treatment.
 6. Enforce Economic Decision Studies entry and publication gates.
 
-**Exit gate:** the output matches an approved reference calculation within agreed
+**Evidence before this becomes delivery work:** the output matches an approved reference calculation within agreed
 tolerance, shows all assumptions and conventions, and cannot be published as a
 recommendation without required reviews.
 
-### Plan 3: Adaptive Pilot Without ML
+### Branch: Adaptive Pilot Without ML
 
-**Goal:** prove that sequential selection reduces full-engine runs without
+**Intended value:** prove that sequential selection reduces full-engine runs without
 changing the decision for the Golden Decision Pack.
 
 **Scope:** a fixed candidate pool, initial representative sample, and one
 transparent scoring rule. Engineer approves every selected next batch.
 
-**Work:**
+**What this branch needs to establish:**
 
 1. Choose a scoring rule: coverage, sensitivity, constraint boundary, or
   decision disagreement.
@@ -614,18 +651,18 @@ transparent scoring rule. Engineer approves every selected next batch.
   weighting method is implemented.
 5. Confirm final choice on designated representative full-engine cases.
 
-**Exit gate:** the pilot reaches the same reviewed decision as the reference plan
+**Evidence before this becomes delivery work:** the pilot reaches the same reviewed decision as the reference plan
 with fewer high-fidelity runs, while preserving its constraints and audit trail.
 
-### Plan 4: Narrow Surrogate And Validated Response Reuse
+### Branch: Narrow Surrogate And Validated Response Reuse
 
-**Goal:** learn whether a narrow output surrogate or one component response
+**Intended value:** learn whether a narrow output surrogate or one component response
 model can safely reduce run count further.
 
 **Scope:** one output contract and one model family/revision. No universal AI
 model and no automatic subsystem cutting.
 
-**Work:**
+**What this branch needs to establish:**
 
 1. Choose one stable target such as 5-year NPV, peak water, or facility margin.
 2. Train and validate an uncertainty-aware surrogate on full-engine cases.
@@ -633,21 +670,21 @@ model and no automatic subsystem cutting.
 4. Add out-of-domain detection and mandatory full-engine escalation.
 5. Compare decision outcome and cost against the no-surrogate adaptive pilot.
 
-**Exit gate:** held-out full-engine cases show acceptable accuracy and calibrated
+**Evidence before this becomes delivery work:** held-out full-engine cases show acceptable accuracy and calibrated
 uncertainty, and the decision remains correct under the documented guardrails.
 
-### Plan 5: Native Physics Sandbox
+### Long-Term Branch: Native Physics Sandbox
 
-**Goal:** establish evidence for or against a narrow native numerical capability.
+**Intended value:** establish evidence for or against a narrow native numerical capability.
 
 **Scope:** synthetic, transparent, non-customer-critical steady-state network
 benchmarks. This is separate from Decision Studies delivery.
 
-**Work:** define equations, component closures, test cases, conservation checks,
+**What this branch needs to establish:** define equations, component closures, test cases, conservation checks,
 convergence diagnostics, reference comparisons, and license boundaries before
 selecting a production implementation language or dependency.
 
-**Exit gate:** a benchmark report demonstrates where the sandbox is correct,
+**Evidence before this becomes delivery work:** a benchmark report demonstrates where the sandbox is correct,
 where it fails, its runtime profile, and whether it solves a measured product
 problem better than study compression or existing engine integration.
 

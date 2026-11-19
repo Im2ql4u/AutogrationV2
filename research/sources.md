@@ -1,6 +1,6 @@
 # Source Ledger
 
-Status date: 2026-08-25. This is a research index, not an archive of licensed
+Status date: 2026-10-13. This is a research index, not an archive of licensed
 or copyrighted source material. Summaries elsewhere in this directory are
 original notes. Priority means expected value to the next technical decision.
 
@@ -8,17 +8,25 @@ original notes. Priority means expected value to the next technical decision.
 
 | Source | Type | What it establishes | Status |
 | --- | --- | --- | --- |
-| [PETEX IPM suite](https://www.petex.com/pe-engineering/ipm-suite/) | Official product page | IPM component map; OpenServer/RESOLVE connect products and third-party software | Summarised |
-| [GAP](https://www.petex.com/products/ipm-suite/gap/) | Official product page | Steady-state equation-based network, optimisation, rule-based forecasts | Summarised |
-| [RESOLVE](https://www.petex.com/products/ipm-suite/resolve/) | Official product page | Coupling, scenarios, probabilistic studies, adaptive timesteps, multilevel optimisation | Summarised |
-| [REVEAL](https://www.petex.com/products/ipm-suite/reveal/) | Official product page | Thermal finite-difference specialised reservoir simulation | Summarised |
-| [GAP/RESOLVE runtime case study](https://www.petex.com/practical-solutions/case-studies/1-integrated-production-modelling/) | Official case study | Vendor description of Jacobian cost/density, parallelisation, PVT/flash, and formulation effects | Summarised as vendor evidence |
-| [PROSPER](https://www.petex.com/products/ipm-suite/prosper/) | Official product page | IPR/VLP, multiphase well/pipeline and lift-response context | Summarised |
-| [MBAL](https://www.petex.com/products/ipm-suite/mbal/) | Official product page | Analytical reservoir models and fast proxy-style calculations | Summarised |
-| [OpenServer](https://www.petex.com/pe-engineering/ipm-suite/openserver/) | Official product page | `DoSet`, `DoCmd`, `DoGet`, external automation, and generic third-party wrapper positioning | Summarised; inspect licensed manuals for exact behavior |
-| [GAP Transient](https://www.petex.com/pe-engineering/ipm-suite/gap-transient/) | Official product page | Separate transient multiphase/thermal/reservoir-response capability and time-scale distinction | Summarised |
+| [PETEX IPM suite](https://www.petex.com/products/integrated-production-modelling-suite/) | Official product page | IPM component map and positioning of reservoir, well, network, optimisation, and OpenServer integration | Summarised; capability boundary, not an algorithm specification |
+| [GAP](https://www.petex.com/products/integrated-production-modelling-suite/gap/) | Official product page | Proprietary equation-based steady-state pressure/flow/temperature balance, nonlinear optimisation, and compositional/black-oil PVT support | Summarised 2026-09-10; no public setting or internal timing details |
+| [RESOLVE](https://www.petex.com/products/integrated-production-modelling-suite/resolve/) | Official product page | Reusable Data Objects, multilevel optimisation, PVT lumping/delumping, parallel scenario workflows, and advertised clustering/hyperthreading | Summarised 2026-09-10; verify licence, installed-version support, configuration, scope, and diagnostics before experiment design |
+| [REVEAL](https://www.petex.com/products/integrated-production-modelling-suite/reveal/) | Official product page | Thermal finite-difference specialised reservoir simulation | Summarised |
+| [Former GAP/RESOLVE runtime case-study URL](https://www.petex.com/practical-solutions/case-studies/1-integrated-production-modelling/) | Historical vendor page, now unavailable | Indexed remnants point to Jacobian cost/density, parallelisation, PVT/flash, data reuse, and formulation effects | Original URL returns 404; no checked Wayback snapshot; portions of `344 -> 17.8` and `10.5 s -> 3.5 min optimisation` survive only as search-index fragments; `3.7 s` and the meaning of `0.5%` remain unverified; request the source through licensed PETEX channels |
+| [PROSPER](https://www.petex.com/products/integrated-production-modelling-suite/prosper/) | Official product page | IPR/VLP, multiphase well/pipeline and lift-response context | Summarised |
+| [MBAL](https://www.petex.com/products/integrated-production-modelling-suite/mbal/) | Official product page | Analytical reservoir models and fast proxy-style calculations | Summarised |
+| [OpenServer](https://www.petex.com/products/integrated-production-modelling-suite/openserver/) | Official product page | `DoSet`, `DoCmd`, `DoGet`, external batch automation, generic third-party wrapper positioning, and RESOLVE visual workflows | Summarised 2026-09-10; does not publicly specify performance counters, cache/session semantics, or supported optimization tags |
+| [GAP Transient](https://www.petex.com/products/integrated-production-modelling-suite/gap-transient/) | Official product page | Separate transient multiphase/thermal/reservoir-response capability and time-scale distinction | Summarised |
 | Official PETEX manuals, OpenServer help, release notes, training examples | Licensed/internal material | Exact supported API and observable engine behavior | Acquire lawfully; do not archive verbatim here |
 | Autogration sibling repositories | Internal source | Current orchestration, scenario expansion, and OpenServer execution boundary | Initial review summarised |
+| [WhitsonPVT API](https://manual.pvt.whitson.com/api/) | Vendor documentation | OAuth external API is provisioned on request; static documentation shows a project-scoped wells read and says detailed endpoints are client specific | Summarised 2026-09-08; obtain sandbox contract before claiming endpoint support |
+| [WhitsonPVT manual and black-oil methodology](https://manual.pvt.whitson.com/methods/child_models/black_oil_tables/) | Vendor documentation | PVT data/QC, parent EOS and child-model workflow, PVT calculations, and documented black-oil assumptions/failure cases | Summarised 2026-09-08; vendor behaviour, not a complete implementation specification |
+
+## P0: governed run discovery and analysis
+
+| Source | Type | What it establishes | Status |
+| --- | --- | --- | --- |
+| [Aker BP Goose](https://github.com/AkerBP/goose) | Open source application, revision `3faf39a` | Entra/CDF user-context authentication, governed MCP tools, reference-first datasets, sandboxed analysis, lineage-aware artifacts, and chat/client visualization patterns | Source inspected 2026-10-13; CDF surface retrieves known operational time-series IDs but does not discover Autogration simulation ensembles or runs |
 
 ## P0: inspectable numerical-simulation references
 

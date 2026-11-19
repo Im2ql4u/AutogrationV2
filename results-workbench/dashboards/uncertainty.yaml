@@ -1,0 +1,38 @@
+spec_version: 1
+id: uncertainty
+order: 40
+title: Spread and drivers
+question: How wide is the range of outcomes across cases, and which assumptions drive it?
+description: >
+  Uses all selected cases of the study. P90 is the low and P10 the high estimate (exceedance
+  convention). Assumption axes come from the case columns (Autogration assumption sets).
+sections:
+  - title: Range of outcomes
+    visuals:
+      - id: fan_oe
+        type: fan
+        measure: oe_rate
+        width: 6
+      - id: s_curve
+        type: s_curve
+        title: Total oil equivalent across cases
+        measure: oe_volume_mmboe
+        width: 6
+  - title: Drivers
+    visuals:
+      - id: tornado
+        type: tornado
+        measure: oe_volume_mmboe
+        width: 6
+      - id: by_axis
+        type: bar
+        title: Total per case
+        measure: oe_volume_mmboe
+        x: case
+        width: 6
+      - id: uncertainty_note
+        type: note
+        note: |
+          TODO(engineer): Autogration studies are Cartesian scenario grids today, not probabilistic
+          samples, so P90/P50/P10 here describe the spread of the chosen cases, not probabilities.
+          Decide how this should be labelled for your audience.

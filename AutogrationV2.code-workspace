@@ -1,0 +1,34 @@
+{
+  "folders": [
+    {
+      "name": "Autogration V2 Research",
+      "path": "."
+    },
+    {
+      "name": "Autogration Backend",
+      "path": "autogration"
+    },
+    {
+      "name": "Autogration Frontend",
+      "path": "autogration_frontend"
+    },
+    {
+      "name": "Autogration Infrastructure",
+      "path": "autogration-infrastructure"
+    }
+  ],
+  "settings": {
+    "files.exclude": {
+      "**/.venv/**": true,
+      "**/node_modules/**": true,
+      "**/local_storage/**": true,
+      "**/artifacts/**": true
+    },
+    "search.exclude": {
+      "**/.venv/**": true,
+      "**/node_modules/**": true,
+      "**/local_storage/**": true,
+      "**/artifacts/**": true
+    }
+  }
+}

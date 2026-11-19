@@ -1,0 +1,311 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Backend: Start",
+			"type": "shell",
+			"command": "uv",
+			"args": [
+				"run",
+				"uvicorn",
+				"backend.main:app",
+				"--reload",
+				"--host",
+				"0.0.0.0",
+				"--port",
+				"5201"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/autogration/apps/backend",
+				"env": {
+					"LOCAL_DEV": "true"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+				"focus": false,
+				"close": false
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Frontend: Start",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"run",
+				"dev"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/autogration_frontend/frontend"
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"reveal": "always",
+				"panel": "new",
+				"focus": false,
+				"close": false
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Frontend: Install Dependencies",
+			"type": "shell",
+			"command": "npm.cmd",
+			"args": [
+				"install"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/autogration_frontend/frontend"
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "shared"
+			}
+		},
+		{
+			"label": "Docker: Start Dev Services",
+			"type": "shell",
+			"command": "docker compose up -d azurite postgres smb; $ready = $false; while (-not $ready) { docker exec autogration-postgres pg_isready -U user -d autogration *> $null; $ready = $LASTEXITCODE -eq 0; if (-not $ready) { Start-Sleep -Seconds 1 } }; Write-Host 'Postgres ready'",
+			"options": {
+				"cwd": "${workspaceFolder}/autogration"
+			},
+			"presentation": {
+				"reveal": "silent",
+				"panel": "shared",
+				"close": true
+			},
+			"problemMatcher": [],
+			"runOptions": {
+				"runOn": "folderOpen"
+			}
+		},
+		{
+			"label": "DB: Run Alembic Migrations",
+			"type": "shell",
+			"command": "uv",
+			"args": [
+				"run",
+				"python",
+				"-m",
+				"alembic",
+				"upgrade",
+				"head"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/autogration/apps/backend"
+			},
+			"presentation": {
+				"reveal": "silent",
+				"panel": "shared",
+				"close": true
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Nodeclient: Start",
+			"type": "shell",
+			"command": "uv",
+			"args": [
+				"run",
+				"python",
+				"run_local_nodeclient.py"
+			],
+			"options": {
+				"cwd": "${workspaceFolder}/autogration/apps/nodeclient",
+				"env": {
+					"LOCAL_DEV": "true"
+				}
+			},
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "nodeclient",
+				"pattern": {
+					"regexp": "^$"
+				},
+				"background": {
+					"activeOnStart": true,
+					"beginsPattern": ".",
+					"endsPattern": "Starting nodeclient|Polling for tasks|Connected"
+				}
+			},
+			"presentation": {
+				"reveal": "always",
+				"panel": "dedicated",
+				"focus": false,
+				"close": false
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Full Stack: Start All",
+			"dependsOn": [
+				"Docker: Start Dev Services",
+				"DB: Run Alembic Migrations",
+				"Full Stack: Start Apps"
+			],
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "Full Stack: Start Apps",
+			"dependsOn": [
+				"Backend: Start",
+				"Frontend: Start",
+				"Nodeclient: Start"
+			],
+			"dependsOrder": "parallel",
+			"problemMatcher": []
+		},
+		{
+			"label": "Debug: Pre-Launch",
+			"dependsOn": [
+				"Docker: Start Dev Services",
+				"DB: Run Alembic Migrations"
+			],
+			"dependsOrder": "sequence",
+			"problemMatcher": []
+		},
+		{
+			"label": "Study: sync environment",
+			"type": "shell",
+			"command": "uv sync",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Study: check access",
+			"type": "shell",
+			"command": "uv run tiein access",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Study: list projects",
+			"type": "shell",
+			"command": "uv run tiein project list; if ($?) { uv run tiein project show }",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Study: submit case (dry run first)",
+			"type": "shell",
+			"command": "uv run tiein submit ${input:projectCase} --dry-run; if ($?) { Read-Host 'Submit for real? Enter to continue, Ctrl+C to stop'; uv run tiein submit ${input:projectCase} }",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Study: status (watch)",
+			"type": "shell",
+			"command": "uv run tiein status --watch 60",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated"
+			}
+		},
+		{
+			"label": "Study: fetch results and bookings",
+			"type": "shell",
+			"command": "uv run tiein fetch; if ($?) { uv run tiein bookings }; if ($?) { uv run tiein export-workbench }",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"problemMatcher": []
+		},
+		{
+			"label": "Study: results viewer",
+			"type": "shell",
+			"command": "uv run --extra viewer streamlit run ../../results-workbench/app/viewer.py",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Study: optimise watch (all studies)",
+			"type": "shell",
+			"command": "$env:PYTHONUNBUFFERED='1'; uv run tiein optimise step ${input:studies} --watch 900",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated"
+			},
+			"runOptions": {
+				"instanceLimit": 1
+			}
+		},
+		{
+			"label": "Study: optimise watch log",
+			"type": "shell",
+			"command": "Get-Content data/projects/froskelaar-fixed/studies/watch.log -Encoding utf8 -Tail 40 -Wait",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": {
+				"panel": "dedicated"
+			}
+		},
+		{
+			"label": "Study: tests",
+			"type": "shell",
+			"command": "uv run pytest -q; if ($?) { uv run ruff check src tests }",
+			"options": {
+				"cwd": "${workspaceFolder}/studies/alvheim-tiein"
+			},
+			"group": "test",
+			"problemMatcher": []
+		}
+	],
+	"inputs": [
+		{
+			"id": "studies",
+			"type": "promptString",
+			"description": "Studies of the current project, stepped in this order",
+			"default": "settle-w1 restructure-w1 soften-w1 outer-w1"
+		},
+		{
+			"id": "projectCase",
+			"type": "promptString",
+			"description": "Case of the current project (data/projects/<slug>/project.yaml), or all",
+			"default": "all"
+		}
+	]
+}

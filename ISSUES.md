@@ -1,0 +1,92 @@
+# Alvheim study: issue log
+
+Issues found in the Alvheim tie-in and booking work (model, analysis, toolkit, platform),
+what was done about each, and how the fix was checked. Started 2026-11-18. Licence and
+company figures stay in the study's git-ignored `data/`; this file only has totals.
+
+Status: **fixed** (done and verified), **fixed, verifying** (done, run pending),
+**mitigated** (worked around; the real fix is someone else's), **open**.
+
+Fixed model = registration `01a1e49f…` on test ("ALV_NM_BC_Oct2026 updated Bookings",
+Kristoffer's booking fix).
+
+Decisions of 18 Nov 2026 (booking = economic entitlement, transfers allowed and shown,
+settlement proportional to booked capacity, placeholder economics, FL-off fix is ours,
+build all phases) are recorded in `research/22-optimisation-schemes-and-projects.md`.
+19 Nov: no commercial inputs yet, so value is relative, in Sm3 oil equivalent (T9);
+projects stay optional; the FL on/off switch should be selectable in the app (P9).
+
+## Model (owner: Alvheim model owner, edits in RESOLVE)
+
+| ID | Issue | Impact | Status | Fix / workaround | Verification |
+|---|---|---|---|---|---|
+| M1 | No data switch for Froskelår. The workflow opens FL1/FL2 from 2030 and undoes WELL_OFF events. Zero limits in `Wells_constraints` stopped working from Sep 2030 on dev (FL flowed ~1000 Sm3/d in 2035). `Active_events` and `Project_wells` have no FL row. | A "without Froskelår" baseline is not clean, so every with/without delta is wrong after 2030. | fixed | Ours (decision 5). The `froskelaar-fixed` baseline layers WELL_OFF with PI 0.01, abandonment WC 0.01 %, no liquid and no gas lift (`Wells_data`/`Wells_constraints` rows 42, 43), as assumption changes on the fixed model, so no RESOLVE edit is needed. A cleaner model fix (an `Active_events` row "Froskelår", with Open_FL1/Open_FL2 conditional on it like BY1) needs the workflow script and IPM; it is suggested to the model owner. | Baseline (test, group `51d747e6…`), 18 Nov 12:40: FL1/FL2 are 0 at all 57 steps to Mar 2031, including the Sep 2030 – Mar 2031 window where the old switch failed. Completed run (task `01a1edfd…`): FL1/FL2 oil 0 at all 175 steps to Jan 2041; FL pipework shows at most 3e-5 Sm3/d in 2031–34 (numerical noise). FL tie-in vs this baseline: FL +2.54 MSm3 oil, other wells −0.17 MSm3 over life. |
+| M2 | The workflow reads `Uptime_base` and `Bookings_*` by step index, not date. | Any grid other than the model's monthly one reads wrong uptime and bookings. Forced extra steps shift the rows too. | mitigated; fix open | Use the monthly grid, or remap rows to steps (Kristoffer's `stepseq`). The toolkit's booked-rate lookup now mimics the step-index read (T5). Model fix: a date-based lookup in the workflow. | Toolkit unit tests (step index, coarse grid, UTC months). |
+| M3 | Period-2 optimiser oscillation, Oct 2030 to Apr 2031: Volund shut with FL choked, or the reverse. FPSO oil swings about ±1500 Sm3/d month to month. Cause: the workflow sets `DPControl = CALCULATED` every step. | Noise of ±45 kSm3 in monthly comparisons; 12-month steps lock one phase. | open | Hysteresis, or fixed DPControl for FL1/FL2/Volund in that window. | Not started (model edit). |
+| M4 | GAP does not always honour group limits. The first 2-month step of every coarse BASE puts Tyrving oil at 4141 against a booking of 1836. **New:** monthly M BASE puts Boyla+Frosk liquid at 3251 against 2862 (+14 %) in Oct 2030, Dec 2030 and Mar 2031, inside the M3 window. | Those steps' allocation is not what the contract allows; deltas that include them are suspect. | open; flagged | `tiein bookings` now lists every step more than 2 % above its applied limit (`violations.csv`). Model side: check the optimiser's constraint handling (`CONSTRAINT_TOL` 0.005, `STOP_ON_TARGET_OR_OPTIMISER_ERROR` 0). | 11 violations across the 14 imported runs, listed by `tiein bookings --project booking-release`. |
+| M5 | Gas bookings limit total gas, lift gas included. Results have formation gas only, and GAP's lift-gas property name is unknown. Boyla+Frosk formation gas is about 29 k Sm3/d on average against a total-gas booking of about 397 k (Jul 2026: 167 against a MaxQTotGas of 398 kSm3/d). | Gas booking satisfaction can't be judged; gas looks far below booking. | open | Report marks gas as "formation only". `bookings.lift_gas_property` adds lift gas once known. **Probe, 18 Nov:** none of `GasInjRate`, `GLRate`, `GasliftRate`, `GasLiftRate`, `GasInjected`, `InjGasRate`, `TotGasRate` exists under `SolverResults[0]` of a well or group. Next: the name from the GAP OpenServer manual or Kristoffer, or read it from the GLINJ system. **Browse of NT1:** the well holds `MAXGINJ`/`MINGINJ` (80/80 = 1000 Sm3/d), `MINGINJNC`, `GLInjDepthMode`, `PROSPER.SIN.GLF.GLRate`; these are applied limits, not a solver result. Probe 2 tracks them and 15 more candidate names under `SolverResults[0]`. **Probe 2 result:** none of the 15 names returns a value; `MAXGINJ`/`MINGINJ` are fixed limits (80–250). Tyrving's `MaxQTotGas` is about 300 against formation gas of 32–70, so lift gas is most of the booked total. Still needed: the name from Kristoffer or the GAP OpenServer manual. | Probe `948cc9da…` (test): one tracked step only (P8). Probe 2 `a226f4e2…` (to 2032), completed. |
+| M6 | Per-well optimiser weights by booking group: `Weightings` (NT1 3.0, Volund wells 2.0) and `Weightings2025` (Tyrving and Boyla+Frosk 1.5, Volund wells 0.01). It is undocumented which table applies when, and why. | This is the "nudge": when the FPSO water limit binds (2028–2034), the weights decide which licences get capacity. | open; which table answered | **Probe, 18 Nov:** at the first step (Jul 2026), GAP well `weighting` equals the `Weightings` table (NT1 3.0, ST1 2.5, BY3 1.5, FA 1.0, VI1 1.2, SK1 1.5, VO1/VO7 2.0, VO6 1.0). TI1 has 2.5 without a row in either table. BY1, VO5, SG1 and KA1 read as missing. **Probe 2:** the weights of all 12 tracked wells are unchanged at all 66 steps to Dec 2031, so `Weightings` applies throughout and `Weightings2025` is not used in that period; FL1/FL2 have 1.5. Still to ask the owner: what the weights represent and whether `Weightings2025` is meant to be used. | Probe `948cc9da…`; probe 2 `a226f4e2…`. |
+| M7 | `Bookings_*` have 24 rows from 30 Jun 2026 22:00 UTC (1 Jul local), and the last row repeats Aug/Sep 2027. | Probably harmless (step index past Sep 2027 falls through to `Future_Bookings`), but unexplained. | open | Confirm with the owner. | – |
+
+## Analysis (handoff files REPORT.md, compare.md, comparison.md)
+
+| ID | Issue | Status | Fix | Verification |
+|---|---|---|---|---|
+| A1 | Handoff volumes integrate the instantaneous solver rate × days, which ignores downtime (uptime mostly 0.90–0.98, 0.78 in May–Jun 2027, 0.54–0.59 around a full stop in Aug 2029). Volumes are 5–7 % high: M BASE full life 22.095 vs GAP CumOil 20.655 MSm3, and the booking period 3.248 vs 3.094. The lift-all gain becomes +0.188 instead of +0.194 MSm3. | fixed (errata) | Use GAP `CumOil` / `AvgOilRate` × days; the toolkit's volume check does. Errata added to the three files. | Recomputed from the downloaded results (session analysis). |
+| A2 | Quarterly single-lift results are distorted by Q BASE's first-step Tyrving violation (M4). For Tyrving lifted, FPSO +0.160 but the Tyrving group only +0.035; the host wells take the rest. | fixed | Four monthly single lifts (`booking-release`: `m_lift_tyrving`, `m_lift_volund`, `m_lift_vilje_skogul`, `m_lift_boyla_frosk`), compared with M BASE over all wells. | Completed 18 Nov. Oil, all wells, booking period / full life (kSm3, rate × days): Boyla+Frosk +47 / +48, Volund −38 / −53, Vilje+Skogul +12 / −56, Tyrving +27 / −38. Each lifted group gains, but the host wells lose more under the FPSO water limit (A7). |
+| A3 | Grid advice conflicts. REPORT.md says Q is good enough for screening. comparison.md recommends MH, but its runs are not on 01a1e49f (REF on D8; booking-period gain +89 vs +188 kSm3). On the fixed model Q overstates the booking gain by about a third. | open | Errata: screen with MH, confirm monthly. Re-check MH on the fixed model with one BASE/LIFT pair before relying on it. | – |
+| A4 | "Lifting bookings: full life ≈ 0" hides redistribution and timing. Volumes move between licences, and the early gain is worth about +61 kSm3 discounted at 8 %. | fixed (errata) | Settlement and NPV per licence in the toolkit (notebook 01); errata in REPORT.md. | Per-licence figures in the study's `data/`. |
+| A5 | The lift-all gain was attributed to Tyrving from the group split (+0.157 of +0.194). That is a change in group production, not cause; Tyrving's own lift is the distorted A2 run. | fixed | Attribution from the monthly single lifts (A2); coalition runs (research/22) for Shapley. | Single lifts are not additive: in the booking period they sum to +48 kSm3 against +161 for lift-all, and only the Boyla+Frosk lift is positive over full life. |
+| A6 | Gas comparisons use formation gas against total-gas bookings (M5). | mitigated | Basis shown in every report; lift gas added when M5 is resolved. | – |
+| A7 | **New.** Lifting bookings for good moves oil forward and between licences: all wells +161 kSm3 in the booking period but −12 kSm3 over full life. Lifting only the first 24 months (`m_lift_booking_period`) gives +164 and +62 kSm3. The FPSO water limit binds, so tie-back water displaces host wells. | finding | Feeds scheme 4 (restructure bookings): time-limited and group-targeted releases first. | Monthly runs of 18 Nov; PV at placeholder economics: lift-all +28 MUSD, booking-period-only +43, Boyla+Frosk only +21, the other single lifts −8 to −27. Licence split in the study's `data/`. |
+
+## Toolkit (`studies/alvheim-tiein`)
+
+| ID | Issue | Status | Fix | Verification |
+|---|---|---|---|---|
+| T1 | Projects were mandatory: nothing could run outside one, and runs made elsewhere (Kristoffer's) couldn't be compared. | fixed | Projects optional. `tiein run REQUEST.yaml` for one-off runs (`data/adhoc`). `tiein project add-run <task or group>` attaches existing runs as `imported` cases. New `scenario_comparison` type without a switch. `project new --import-baseline`. | 75 tests. `booking-release` holds Kristoffer's 14 runs plus 5 new ones. |
+| T2 | Runs and models are per environment, but the toolkit had one URL. The first project's runs were on dev, against the old model. | fixed | Named environments in `.env` (`AUTOGRATION_<NAME>_API_URL/_SCOPE`). A project records its `environment`, and every command uses it. The old dev project is marked superseded. | Tests; `booking-release` and `froskelaar-fixed` on test. |
+| T3 | A 504 from simulate could still start the runs, so retries duplicated them. | fixed | Idempotency-Key per request (hash of model + request); retries on 502/503/504, transport errors and 409 "still being", with backoff. | Unit tests; used for the 7 submissions of 2026-11-18. |
+| T4 | No quick way to look at a project in the web app. | fixed | `project show` prints the web compare link, baseline first. | Link opens the 14 imported runs. |
+| T5 | Booked rates from tables were read by date; the workflow reads by step index (M2). | fixed | `booked_from_tables` mimics the workflow: monthly rows, then `Future_Bookings` row k, then flat `Bookings_future`. | Unit tests. Applied limits are tracked in new runs anyway. |
+| T6 | Gas compared without lift gas; violations not detected. | fixed | `basis` column, `lift_gas_property`, `violations()` and `violations.csv`. | Tests; real report on `booking-release`. |
+| T7 | Lifting a booking took hundreds of cell entries. | fixed | Row ranges: `{rows: "0-23", value: 99999}`. | Tests; the generated requests match Kristoffer's M LIFT cell for cell (1696). |
+| T8 | `project check`, the notebooks and `bookings` assumed a switch and submitted runs only, and ignored row ranges in cell checks. | fixed | Guards in `prepare.dataobject_cells` (row ranges expanded), the notebook generator (switch, imported runs, the project's environment) and the bookings CLI (pandas warning). | Tests; check and bookings on `booking-release`. |
+| T9 | There are no commercial inputs yet (prices, tax), but studies and settlement need a value. | fixed | `value_basis: oe` in `economics.yaml` (now the default): revenue is the oil-equivalent volume, `prices.csv` is optional, and every report states its unit ("Sm3 oe"). Comparisons are relative: case against baseline, each case against its bookings. `value_basis: price` restores money. | Unit tests (oe and price bases, unit values in restructure plans); `optimise check settle-w1` reports "objective pv in Sm3 oe". |
+| T10 | Studies in one project need the same base and baseline runs, but each study would start its own copy. `StudyState.record_shared` existed and was never called. | fixed | The runner digests each request without its run name and, before submitting, looks for a submitted or completed run with that digest in the project's other studies. Shared runs don't use budget, show in the dry run, and `cancel` leaves them alone. | Test with two studies; on test, restructure-w1, soften-w1 and outer-w1 share settle-w1's e001/e002 (6 MH runs saved). |
+| T11 | `optimise step --watch` followed one study per process and stopped on the first gateway error. | fixed | `step` takes several studies; with `--watch` it rides out 5xx, 401, 408, 429 and transport errors. VS Code tasks for the watch and its log (`PYTHONUNBUFFERED=1`, or the log stays empty). | CLI test with a 502; the four w1 studies watched from one process since 19 Nov 09:26. |
+
+## Platform (Autogration)
+
+| ID | Issue | Status | Fix / proposal | Verification |
+|---|---|---|---|---|
+| P1 | Mass failures at start (8.4 GB model copy per task), licence errors instead of queueing, duplicate tasks after 504, misdated steps. | fixed on test | Kristoffer, 17 Nov: #1094 (no per-task model copy), #1095 (licence requeue), #1096/#1098 (Idempotency-Key), #1084 (ISO schedule dates, `GAP.` tracked variables), #1085 (step dating). Main (prod) unchanged since 30 Oct. | 7 submissions on 18 Nov started without errors. |
+| P2 | Results have no lift gas: the node client collects a fixed `EquipmentResults` list. | open | Add GAP's lift-gas rate to `EquipmentResults` once M5 names it. | – |
+| P3 | Nothing flags GAP solves that break group limits (M4). | open | A results health check: rates above applied limits per step, shown in Results. | – |
+| P4 | OpenServer licences on test cap parallel runs; more runs queue. About 5 were free on 17 Nov; 7 ran at once on 18 Nov. | known | Optimisation loops schedule within the pool and yield to manual runs (research/22). | – |
+| P5 | Results compare has no persisted baseline or project; sweep runs show as "case N". | in review | Optional projects in Autogration (research/22): backend AkerBP/autogration#1101 (`feature/optional-projects`) and frontend AkerBP/autogration_frontend#165 (`feature/results-projects`, with Sm3 oe as the default value basis), both to `development`, both ready for review with every Copilot comment fixed and answered (6 and 5). | Backend 1563 tests; frontend 365 tests, typecheck, lint. |
+| P6 | Model files (RSL, workflow script) can't be read through the API, and the S-drive is not reachable from here. | open | A read-only endpoint for the RESOLVE workflow script would make model behaviour (M1, M2, M6) checkable. | – |
+| P7 | Compare mixes VM sizes; D4 differs from D2/D8 by about 0.2 %. | open | Warn in compare when VM sizes differ. Projects' `/summary` flags `vm_size_differs` (PR in progress). | – |
+| P8 | Probe 1 (DEBUG_FLAG 0) returned tracked variables for the first step only (Jul 2026), though its results have 19 steps to 2028. The FL-off baseline, with the model's own DEBUG_FLAG, tracks every step. | Tracked-variable probes with DEBUG_FLAG 0 answer only for the first step. | fixed (documented) | Keep the model's DEBUG_FLAG in tracking runs. | Probe 2 (model DEBUG_FLAG) tracked all 66 steps to Dec 2031. |
+| P9 | The FL on/off switch can't be a preset. Presets (`/models/{id}/presets`, table `core.assumption_presets`) store only `assumptions`, and the frontend converts only node replacements; the switch also needs 10 DataObject cells (`Wells_data` PI and Abandonment_WC, `Wells_constraints` MaxLiquidRate/MinGasInj/MaxGasInj, rows 42–43) and two WELL_OFF schedules. | in progress | Presets carry `dataobject_tables` (backend migration, API, frontend save/load), branch `feature/preset-dataobject-tables`, PRs to `development`. Once deployed to test: save the preset "Froskelår off" on `01a1e49f…` from the baseline run's assumption set. A fixed model with a real switch still needs the RESOLVE edit in M1. | – |
+
+## Runs started 2026-11-18 (test), all completed and analysed by 21:30
+
+| Project / run | Purpose | Group |
+|---|---|---|
+| booking-release `m_lift_tyrving`, `m_lift_volund`, `m_lift_vilje_skogul`, `m_lift_boyla_frosk` | A2/A5: monthly single lifts | c532f78f, 82cc6dfa, f4167826, 9110322b |
+| booking-release `m_lift_booking_period` | Soften hypothesis: release only Jul 2026 – Sep 2027 | 6a552c6e |
+| froskelaar-fixed `baseline` | M1: FL off with the layered switch | 51d747e6 |
+| adhoc `Alvheim probe weighting+liftgas 2027` | M5, M6: lift-gas name, which weights apply (to 2028) | 948cc9da |
+| adhoc `Alvheim probe2 weights+liftgas 2032` | M5, M6, P8: weights over time, `MAXGINJ`/`MINGINJ`, 15 lift-gas candidates (to 2032, model DEBUG_FLAG) | a226f4e2 |
+
+## Runs started 2026-11-19 (test, MH grid, D4ads_v5)
+
+Optimisation wave 1 in `froskelaar-fixed`. Four studies (settle-w1, restructure-w1,
+soften-w1, outer-w1) share the two base runs; their candidate waves follow when these
+finish. Progress: `data/projects/froskelaar-fixed/studies/watch.log`.
+
+| Project / run | Purpose | Task | Group |
+|---|---|---|---|
+| froskelaar-fixed settle-w1 `e001` | MH base: FL on, today's bookings and weights (the base every candidate changes) | 01a1f2e2-1afb… | 25a11980 |
+| froskelaar-fixed settle-w1 `e002` | MH reference: FL off (baseline), to score candidates on the same grid | 01a1f2e2-2085… | fb4fc3c2 |

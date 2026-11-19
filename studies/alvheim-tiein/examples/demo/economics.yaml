@@ -1,0 +1,19 @@
+# FICTIONAL demo assumptions for the method demo notebook. Not a price deck, not contract terms.
+currency: USD
+valuation_date: 2027-01-01
+discount_rate: 0.08
+opex_per_sm3oe: 60.0
+water_cost_per_sm3: 2.0
+tax_rate: 0.0
+gas_sm3_per_sm3oe: 1000.0
+tariffs:
+  - payer_license: PL102
+    payee_license: PL101
+    basis: oe_sm3
+    rate: 15.0
+    description: Fictional processing tariff at the PL101 host
+  - payer_license: PL201
+    payee_license: PL101
+    basis: oe_sm3
+    rate: 15.0
+    description: Fictional processing tariff at the PL101 host

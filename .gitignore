@@ -1,0 +1,38 @@
+# Downloaded local analysis artifacts
+artifacts/
+
+# Study inputs and outputs (prices, contracts, forecasts, downloaded runs) stay local.
+studies/*/data/
+
+# Local connection configuration; keep credentials out of this repository.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/local.env
+
+# Generated dependencies, environments, caches, and local infrastructure state.
+**/node_modules/
+**/.venv/
+**/__pycache__/
+**/.pytest_cache/
+**/.ruff_cache/
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.*
+**/local_storage/
+**/.azurite/
+# Git worktrees for changes to the sub-repositories
+.worktrees/
+
+# Separate clones of the AkerBP repositories (their own remotes); not part of this repo
+autogration/
+autogration_frontend/
+autogration-infrastructure/
+goose/
+well-potential-tool/
+
+# Scratch files
+.tmp_*

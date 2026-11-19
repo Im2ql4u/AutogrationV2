@@ -1,0 +1,61 @@
+# Project definition. `tiein project new` writes this to data/projects/<slug>/project.yaml
+# (git-ignored); edit it there. Projects are optional: they group runs that are compared
+# against one baseline. One-off runs don't need one (`tiein run`).
+
+# Prefix of every run name: unique per asset (it also names the run in CDF).
+name: $NAME
+# case_comparison: about a new reservoir (the switch); scenario_comparison: cases that
+# differ only by their changes.
+type: $TYPE
+# Named environment from .env (AUTOGRATION_<NAME>_API_URL); its model ids and runs only
+# exist there.
+environment: $ENVIRONMENT
+asset: $ASSET
+# Registered model (register_model task id).
+model_id: "$MODEL_ID"
+description: ""
+vm_size: null                      # null = Autogration default; compare only like VM sizes
+$SWITCH_BLOCK
+# GAP groups whose rates are limited to booked FPSO capacity. With track_applied the
+# limits the model applies are recorded at every step, so the booking analysis uses
+# what was enforced rather than only the tables. Gas bookings limit total gas: set
+# lift_gas_property to the group property with the lift-gas rate to compare it fully.
+bookings:
+  groups: $BOOKING_GROUPS
+  gap_system: PROD
+  track_applied: true
+  lift_gas_property: null
+
+analysis:
+  # Licence(s) of the new reservoir: the paying side.
+  user_licenses: $USER_LICENSES
+
+# Runs at once: per submission, and your unfinished runs in Autogration plus the new
+# ones. Neither may exceed 50. Runs beyond the free OpenServer licences wait in the queue.
+limits:
+  max_runs_per_submit: 40
+  max_active_runs: 40
+
+# Extra OpenServer variables recorded at every step (`tiein steps <case>`). A leading
+# GAP is rewritten to resolve.module[0].
+tracked_variables: []
+
+# Cases. Exactly one is the baseline. A case can build on another (`based_on`) and
+# inherits its changes; `changes` takes the keys of POST /models/{model_id}/simulate:
+# assumptions, dataobject_tables, resolve_settings, module_settings, schedule_ops (and
+# exclude, include_base_case for sweeps). Schedule dates may be ISO (YYYY-MM-DD). Table
+# cells may give a row range and one value:
+#     - {object_alias: Bookings_oil, table_name: Tyrving, rows: "0-23", value: 99999}
+# Runs made elsewhere are attached as `imported` cases with `tiein project add-run`.
+#
+# Booking levers per well (`tiein project levers` lists them with their table rows):
+# gas-lift injection and production choke dP. A RESOLVE workflow that writes well
+# settings every step overrides GAP properties: Alvheim's sets DPControl to CALCULATED
+# and the gas-lift mode, and writes MinGasInj/MaxGasInj (1000Sm3/d), MaxLiquidRate
+# (Sm3/d) and MaxDrawdown (bar) from Wells_constraints. Change those cells, e.g.
+#   dataobject_tables:
+#     - {object_alias: Wells_constraints, table_name: MaxGasInj, index: <row>, values: [100]}
+# GAP properties (replace assumptions) work in models without such a workflow:
+#   - {operation: replace, path: "<well path>", property_name: DPControlValue, values: [5]}
+cases:
+$CASES_BLOCK

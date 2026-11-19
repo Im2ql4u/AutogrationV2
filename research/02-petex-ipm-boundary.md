@@ -25,8 +25,12 @@ compressors, pumps, and facilities. It can draw on dynamic component models or
 pre-calculated responses such as lift curves. It also provides constrained,
 nonlinear optimisation and a rule-based forecast mode.
 
-The public runtime case study gives unusually useful, but still vendor-authored,
-evidence about the numerical shape of one GAP model:
+The former public PETEX runtime case study gave unusually useful, but still
+vendor-authored, evidence about the numerical shape of one GAP model. Its URL
+now returns 404, no snapshot was found in the checked Internet Archive index,
+and only portions survive in search-index fragments and the prior research
+notes. Treat the following as historical vendor claims pending lawful recovery
+of the original source:
 
 - Roughly 1,100 network variables represented rate-balance and pressure-drop
   equations.
@@ -37,6 +41,10 @@ evidence about the numerical shape of one GAP model:
 - The case study attributes much of network runtime to Jacobian construction;
   it reports parallel Jacobian generation and model-formulation changes as
   material speed levers.
+
+The full timing sequence, comparison conditions, hardware, software version,
+and meaning of a cited `0.5%` have not been independently recovered. They must
+not be presented as a verified near-100x benchmark for Autogration.
 
 This supports a specific conclusion: a better GAP-like solver is not mainly
 about choosing Newton versus another outer nonlinear method. Derivative quality,

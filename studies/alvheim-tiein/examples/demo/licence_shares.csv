@@ -1,0 +1,10 @@
+license,company,share,valid_from,valid_to
+PL101,Company A,0.65,2020-01-01,
+PL101,Company B,0.35,2020-01-01,
+PL102,Company A,0.50,2020-01-01,
+PL102,Company C,0.50,2020-01-01,
+PL201,Company A,0.80,2020-01-01,
+PL201,Company C,0.20,2020-01-01,
+PL301,Company A,0.40,2020-01-01,
+PL301,Company B,0.30,2020-01-01,
+PL301,Company C,0.30,2020-01-01,

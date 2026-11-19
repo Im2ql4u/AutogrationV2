@@ -1,0 +1,29 @@
+spec_version: 1
+id: data
+order: 70
+title: Data and export
+question: Give me the numbers in a table I can take elsewhere.
+description: Every table can be downloaded as CSV, XLSX or Parquet; the whole page as XLSX, HTML or a zip bundle.
+sections:
+  - title: Annual volumes
+    visuals:
+      - id: annual_by_case_field
+        type: table
+        rows: [case, entity.field, period]
+        grain: year
+        measures: [oil_volume, gas_volume, water_volume, water_injection_volume, oe_volume_mmboe]
+  - title: Monthly profile per well (focus case)
+    visuals:
+      - id: monthly_per_well
+        type: table
+        rows: [identifier, period]
+        grain: month
+        cases: focus
+        measures: [oil_rate, gas_rate, water_rate, water_injection_rate, gas_lift_rate, cum_oil, cum_gas, reservoir_pressure, wellhead_pressure]
+      - id: export_note
+        type: note
+        note: |
+          TODO(engineer): Power BI has dedicated export layouts (Export, Export_TC, FMRA, PI Export,
+          Termsheet): monthly rates/volumes/cumulatives/pressures per well and case, and annual
+          incremental sales volumes. Copy the column order your downstream tool expects into a
+          table visual here.

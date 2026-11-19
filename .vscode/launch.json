@@ -1,0 +1,73 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Backend: Python Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "backend.main:app",
+                "--reload",
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "5201"
+            ],
+            "cwd": "${workspaceFolder}/autogration/apps/backend",
+            "envFile": "${workspaceFolder}/autogration/.env",
+            "env": {
+                "LOCAL_DEV": "true"
+            },
+            "console": "integratedTerminal",
+            "consoleName": "Backend",
+            "subProcess": true,
+            "justMyCode": true
+        },
+        {
+            "name": "Frontend: Chrome",
+            "type": "chrome",
+            "request": "launch",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}/autogration_frontend/frontend/src",
+            "preLaunchTask": "Frontend: Start"
+        },
+        {
+            "name": "Frontend: Edge",
+            "type": "msedge",
+            "request": "launch",
+            "url": "http://localhost:5174",
+            "webRoot": "${workspaceFolder}/autogration_frontend/frontend/src"
+        },
+        {
+            "name": "Nodeclient: Python",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "nodeclient.autogration_client",
+            "cwd": "${workspaceFolder}/autogration/apps/nodeclient",
+            "envFile": "${workspaceFolder}/autogration/.env",
+            "env": {
+                "LOCAL_DEV": "true"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Full Stack: Debug All",
+            "configurations": [
+                "Backend: Python Debugger",
+                "Frontend: Chrome",
+                "Nodeclient: Python"
+            ],
+            "preLaunchTask": "Debug: Pre-Launch",
+            "stopAll": true,
+            "presentation": {
+                "hidden": false,
+                "group": "Autogration",
+                "order": 1
+            }
+        }
+    ]
+}
