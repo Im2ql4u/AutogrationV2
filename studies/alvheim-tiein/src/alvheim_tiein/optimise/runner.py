@@ -43,7 +43,12 @@ from alvheim_tiein.project import (
 
 PLAN_COLUMNS = ["group", "period", "phase", "booked_sm3d"]
 REFERENCE_FILES = ("entities.csv", "licence_shares.csv", "prices.csv", "economics.yaml")
-SETTLEMENT_RULES = ("minimal", "equal")
+SETTLEMENT_RULES = ("proportional", "minimal", "equal")
+TIE_IN = (
+    "the new reservoir is off in this comparator: the tie-in, settled by the tie-in "
+    "agreement (tariffs and compensation; notebooks/01_with_without_settlement), not by "
+    "the surplus rules"
+)
 
 
 # ---------------------------------------------------------------------- files
@@ -378,6 +383,7 @@ class Study:
         ready = [ev for ev in s.evaluations if ev.status == "completed"]
         ready.sort(key=lambda ev: not (ev.base or ev.reference))
         scored = []
+        limits = self._fpso_limits() if ready else None
         for ev in ready:
             comparator = None
             if not (ev.base or ev.reference):
@@ -400,12 +406,21 @@ class Study:
                     members=self.ctx.members,
                     log_lines=lines,
                     comparator=comparator,
+                    limits=limits,
                 )
             except (KeyError, ValueError) as e:
                 raise ProjectError(f"scoring {ev.id} (task {ev.task_id}): {e}") from e
             s.record_score(ev.id, score)
             scored.append(ev.id)
         return scored
+
+    def _fpso_limits(self) -> dict[str, float] | None:
+        """FPSO limits for the host's booked capacity; None where the model's tables
+        don't have them (the basis then leaves the host out)."""
+        try:
+            return lv.fpso_limits(self.ctx.tables)
+        except (KeyError, IndexError, ValueError):
+            return None
 
     def _results(self, task_id: str, backend: Backend) -> pd.DataFrame:
         folder = self.ctx.project_paths.results
@@ -503,11 +518,33 @@ def _guard(state: st.StudyState, spec: st.StudySpec, ctx: StudyContext) -> None:
 
 
 # --------------------------------------------------------------------- report
+def settlement_basis(
+    state: st.StudyState, ev: st.Evaluation, against: st.Evaluation
+) -> tuple[pd.Series | None, str]:
+    """The proportional rule's basis ``r_l`` and whose bookings it is: the bookings in
+    force under ``against`` for policy schemes, the plan's own for a restructure (a
+    restructure changes the basis)."""
+    src = ev if state.spec.scheme == "restructure_bookings" else against
+    assert src.score is not None
+    cap = src.score.booked_capacity
+    return (pd.Series(cap, dtype=float) if cap else None), src.id
+
+
 def settlement_table(
-    state: st.StudyState, ev: st.Evaluation, against: st.Evaluation, label: str
+    state: st.StudyState,
+    ev: st.Evaluation,
+    against: st.Evaluation,
+    label: str,
+    *,
+    tie_in: bool = False,
 ) -> pd.DataFrame:
     """Who pays whom if the plan of ``ev`` is adopted over ``against``: per licence the
-    change Δ, and under each rule the award and transfer (positive received)."""
+    change Δ, and under each rule the award and transfer (positive received). The
+    proportional rule splits the surplus by booked capacity (``basis``).
+
+    ``tie_in``: the comparator has the new reservoir off. That change is the tie-in,
+    settled by the tie-in agreement rather than by these rules (research/22), so only
+    Δ is given (rule ``tie-in``)."""
     assert ev.score is not None and against.score is not None
     licences = sorted(set(ev.score.licence_values) | set(against.score.licence_values))
     delta = pd.Series(
@@ -517,10 +554,24 @@ def settlement_table(
         },
         name="delta",
     )
+    if tie_in:
+        return pd.DataFrame(
+            [
+                {"against": label, "rule": "tie-in", "license": lic, "delta": d, "note": TIE_IN}
+                for lic, d in delta.items()
+            ]
+        )
+    basis, basis_of = settlement_basis(state, ev, against)
     rows = []
     for rule in SETTLEMENT_RULES:
+        r = basis if rule == "proportional" else None
         try:
-            award = settlement.awards(delta, rule)
+            if rule == "proportional" and basis is None:
+                raise ValueError(
+                    f"no booked capacity for {basis_of}: scored without tracked group "
+                    "limits (or before the basis was recorded)"
+                )
+            award = settlement.awards(delta, rule, basis=r)
         except ValueError as e:
             rows += [
                 {"against": label, "rule": rule, "license": lic, "delta": d, "note": str(e)}
@@ -528,23 +579,29 @@ def settlement_table(
             ]
             continue
         transfer = settlement.transfers(delta, award)
+        note = f"basis: booked capacity of {basis_of}" if r is not None else ""
         rows += [
             {
                 "against": label,
                 "rule": rule,
                 "license": lic,
                 "delta": float(delta[lic]),
+                "basis": float(r.get(lic, 0.0)) if r is not None else None,
                 "award": float(award[lic]),
                 "transfer": float(transfer[lic]),
-                "note": "",
+                "note": note,
             }
             for lic in licences
         ]
     return pd.DataFrame(rows)
 
 
-def write_report(state: st.StudyState, folder: Path) -> dict[str, Path]:
-    """CSV tables and ``summary.json`` of a study."""
+def write_report(
+    state: st.StudyState, folder: Path, switches: Mapping[str, str | None] | None = None
+) -> dict[str, Path]:
+    """CSV tables and ``summary.json`` of a study. ``switches``: the new reservoir on
+    or off per project case; comparators where it differs from the best plan's case are
+    the tie-in and get no surplus split."""
     folder.mkdir(parents=True, exist_ok=True)
     out: dict[str, Path] = {}
 
@@ -585,7 +642,9 @@ def write_report(state: st.StudyState, folder: Path) -> dict[str, Path]:
         ]
         for label, comp in comparators:
             if comp is not None and comp.score is not None and comp.score.feasible:
-                settlements.append(settlement_table(state, best, comp, label))
+                on, off = (switches or {}).get(best.case), (switches or {}).get(comp.case)
+                tie_in = on is not None and off is not None and on != off
+                settlements.append(settlement_table(state, best, comp, label, tie_in=tie_in))
     if settlements:
         save("settlement.csv", pd.concat(settlements, ignore_index=True))
 
@@ -628,6 +687,7 @@ __all__ = [
     "load_state",
     "reference_digest",
     "save_state",
+    "settlement_basis",
     "settlement_table",
     "study_names",
     "write_report",

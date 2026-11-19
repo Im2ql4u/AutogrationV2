@@ -344,6 +344,9 @@ class Score(BaseModel):
     company_values: dict[str, float] = Field(default_factory=dict)
     by_period: dict[str, float] = Field(default_factory=dict)
     """The objective per period (ISO date): for window flags and plots."""
+    booked_capacity: dict[str, float] = Field(default_factory=dict)
+    """``r_l``: the run's own bookings per licence in discounted Sm3 oe, the host's
+    unbooked FPSO capacity included: the proportional settlement rule's basis."""
     window_share: float | None = None
     window_flag: bool = False
     steps_missing: int = 0
@@ -1174,6 +1177,31 @@ def run_name(project: Project, study: str, ev: Evaluation) -> str:
 
 
 # -------------------------------------------------------------------- scoring
+def booked_capacity(
+    booked: pd.DataFrame,
+    valued: pd.DataFrame,
+    members: Mapping[str, Sequence[str]],
+    ref: Reference,
+    limits: Mapping[str, float] | None = None,
+) -> dict[str, float]:
+    """``r_l`` of one run: its own bookings (group, period, phase, booked_sm3d), split
+    over licences by its own production (``valued``), discounted with its calendar.
+    With FPSO ``limits`` the host licence gets the unbooked capacity."""
+    b = booked.assign(period=pd.to_datetime(booked["period"]).dt.normalize())
+    split = ledgers.group_licence_split(
+        members, ref.entities, valued[["identifier", "period", "oe_sm3"]]
+    )
+    basis = ledgers.booked_basis(
+        b,
+        split,
+        valued,
+        limits=limits,
+        host_basis="residual" if limits else "none",
+        gas_sm3_per_sm3oe=ref.economics.gas_sm3_per_sm3oe,
+    )
+    return {str(k): float(v) for k, v in ledgers.basis_totals(basis).items()}
+
+
 def score_results(
     spec: StudySpec,
     ev: Evaluation,
@@ -1185,13 +1213,15 @@ def score_results(
     members: Mapping[str, Sequence[str]] | None = None,
     log_lines: Iterable[str] | None = None,
     comparator: Score | None = None,
+    limits: Mapping[str, float] | None = None,
 ) -> Score:
     """Objective, licence and company values and feasibility of one finished run.
 
     Periods from the forecast end on (results also report the end date) are dropped
     after the volumes are computed, so the last step keeps its full length.
     Booking violations are checked against the group limits the run applied (tracked
-    variables); without them they are not checked."""
+    variables); without them they are not checked. The same limits give the run's
+    booked capacity per licence (``limits``: FPSO limits for the host's residual)."""
     if status != COMPLETED or results is None or results.empty:
         f = feasibility.check(ev.id, status=status)
         return Score(feasible=False, reasons=f.reasons() or ["no results"], checks=f.as_dict())
@@ -1213,6 +1243,7 @@ def score_results(
 
     notes: list[str] = []
     violations = None
+    capacity: dict[str, float] = {}
     booked = bk.booked_from_steps(steps) if steps is not None and not steps.empty else None
     if booked is not None and members:
         booked = booked[booked["group"].isin(list(members))]
@@ -1228,6 +1259,12 @@ def score_results(
             baseline=ev.id,
         )
         violations = report.violations()
+        try:
+            capacity = booked_capacity(booked, valued, members, ref, limits)
+        except (KeyError, ValueError) as e:
+            notes.append(f"booked capacity not computed: {e}")
+        if not limits:
+            notes.append("booked capacity without the host's residual: no FPSO limits")
     if log_lines is None:
         notes.append("solver logs not checked")
     gain = None
@@ -1264,6 +1301,7 @@ def score_results(
         licence_values=row(licence),
         company_values=row(company),
         by_period={pd.Timestamp(k).date().isoformat(): float(v) for k, v in by_period.items()},
+        booked_capacity=capacity,
         window_share=f.window_share,
         window_flag=f.window_flag,
         steps_missing=f.missing,
@@ -1289,6 +1327,7 @@ __all__ = [
     "StudyBudget",
     "StudySpec",
     "StudyState",
+    "booked_capacity",
     "build_request",
     "evaluation_cells",
     "moved_levers",

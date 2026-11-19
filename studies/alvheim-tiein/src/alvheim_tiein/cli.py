@@ -1308,13 +1308,18 @@ def cmd_optimise_report(args: argparse.Namespace, settings: Settings, paths: Pat
     state = rn.load_state(sp.state)
     if state is None:
         raise ProjectError(f"{args.name} has not started")
-    written = rn.write_report(state, sp.report)
+    assert scope.slug is not None
+    project, _, _ = paths.workspace.load(scope.slug)
+    switches = {c.name: project.switch_state(c) for c in project.cases}
+    written = rn.write_report(state, sp.report, switches)
     _print_outcome(state)
     if "settlement.csv" in written:
         settle = pd.read_csv(written["settlement.csv"])
-        settle = settle[settle["rule"] == args.rule]
+        settle = settle[settle["rule"].isin([args.rule, "tie-in"])]
         notes = sorted(set(settle["note"].dropna()) - {""}) if "note" in settle else []
-        values = [c for c in ("delta", "transfer") if c in settle and settle[c].notna().any()]
+        values = [
+            c for c in ("delta", "basis", "transfer") if c in settle and settle[c].notna().any()
+        ]
         if not settle.empty:
             print(f"\nsettlement ({args.rule}): change per licence and transfer (+ received)")
             pivot = settle.pivot_table(
@@ -1804,7 +1809,13 @@ def build_parser() -> argparse.ArgumentParser:
         s.add_argument("name")
         s.set_defaults(fn=fn)
         if name == "report":
-            s.add_argument("--rule", choices=SETTLEMENT_RULES, default="minimal")
+            s.add_argument(
+                "--rule",
+                choices=SETTLEMENT_RULES,
+                default="proportional",
+                help="settlement rule to print (all are written): proportional splits the "
+                "surplus by booked capacity (decided), minimal makes losers whole, equal",
+            )
     s = scoped(
         osub.add_parser("plans", help="write booking plans of a restructure study (S1, S2)"),
         adhoc=False,

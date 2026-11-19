@@ -147,6 +147,13 @@ def test_a_study_from_new_to_report_against_a_fake_autogration(
     assert "done: completed" in capsys.readouterr().out
     assert cli.main(["optimise", "report", "settle"]) == 0
     out = capsys.readouterr().out
+    # Against the base case (both Froskelaar on) the decided rule; against the
+    # Froskelaar-off baseline the tie-in, which the surplus rules don't settle.
+    assert "settlement (proportional)" in out and "tie-in agreement" in out
+    settle = pd.read_csv(sp.report / "settlement.csv")
+    assert set(settle.loc[settle["against"] == "ref:baseline", "rule"]) == {"tie-in"}
+    assert cli.main(["optimise", "report", "settle", "--rule", "minimal"]) == 0
+    out = capsys.readouterr().out
     assert "settlement (minimal)" in out and "transfer" in out
     assert (sp.report / "settlement.csv").exists() and (sp.report / "summary.json").exists()
     assert cli.main(["optimise", "list"]) == 0

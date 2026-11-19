@@ -172,10 +172,17 @@ uv run tiein optimise check settle-w1                            # builds every 
 uv run tiein optimise step settle-w1 --dry-run                   # next wave: new and shared runs
 uv run tiein optimise step settle-w1 soften-w1 --watch 900       # follow, score, submit until done
 uv run tiein optimise status settle-w1                           # evaluations so far (offline)
-uv run tiein optimise report settle-w1 --rule minimal            # tables, frontier, settlement
+uv run tiein optimise report settle-w1                            # tables, frontier, settlement
 uv run tiein optimise cancel settle-w1
 ```
 
+- **Settlement.** `report` writes `settlement.csv`: for the best plan against the base
+  case and each reference case, the change Δ per licence and, under each rule, the
+  award and transfer (positive received). `proportional` (decided, the default) splits
+  the surplus by booked capacity r_l: discounted Sm3 oe of oil + gas bookings, split
+  over a group's licences by production, with licence 203 holding the unbooked FPSO
+  capacity. Policy schemes use the comparator's bookings; `restructure_bookings` uses
+  the plan's own. `--rule minimal` (losers made whole) or `equal` prints the others.
 - **Value basis.** With `value_basis: oe` in `economics.yaml` (the default), value is
   oil-equivalent volume: oil Sm3 + gas Sm3 / `gas_sm3_per_sm3oe` (1000), discounted, with
   costs and tariffs in Sm3 oe too. No prices are needed, and every comparison is

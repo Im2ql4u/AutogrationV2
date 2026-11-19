@@ -57,7 +57,7 @@ here have totals only.
 |---|---|---|---|
 | AkerBP/autogration#1101 | `feature/optional-projects` | Optional projects: tables and migration 0023, roles, API, attach at submit, diff summary, idempotent attach | ready; 6 Copilot comments fixed and answered; 1563 backend tests pass |
 | AkerBP/autogration_frontend#165 | `feature/results-projects` | Results project mode: baseline plus cases, bookings vs produced, settlement, transfers, frontier, 8 SVG visuals; Sm3 oe default when no prices are uploaded | ready; 5 Copilot comments fixed and answered; 365 tests, typecheck and lint pass |
-| presets with table edits (backend and frontend) | `feature/preset-dataobject-tables` | Presets also store DataObject table edits, so the Froskelår switch can be one selectable preset (P9) | being written; links follow in WORKLOG.md |
+| AkerBP/autogration#1102 + AkerBP/autogration_frontend#166 | `feature/preset-dataobject-tables` | Presets also store DataObject table edits, so the Froskelår switch can be one selectable preset (P9); simulate with a preset applies its table edits | ready; Copilot review requested; backend 1431 tests and CI pass, frontend 273 tests. Migration 0023 clashes with #1101: the second to merge renumbers to 0024. Deploy the backend first |
 | merged 15 Nov | – | #1076 (archive names with brackets), #1077 (fetch missing files before validation), #1079, frontend #138 (Results section) | merged |
 
 Where an agent should look hardest:
@@ -69,7 +69,9 @@ Where an agent should look hardest:
   in the browser (local storage per project), and the unit on every chart. There are no
   DOM tests (Vitest runs without jsdom), so keyboard and hover behaviour need a manual
   look.
-- **Presets**: that existing presets (assumptions only) still load and apply unchanged.
+- **Presets** (#1102, #166): that existing presets (assumptions only) still load and
+  apply unchanged. Note the behaviour change: loading an assumptions-only preset on the
+  simulate page now also clears the current schedule events and table edits.
 
 ## The Froskelår on/off switch
 

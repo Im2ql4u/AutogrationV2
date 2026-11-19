@@ -20,9 +20,17 @@ Newest first. Run ids are on **test** unless marked; full ids are in the toolkit
   - Also on #165, Sm3 oe is the default value basis without prices (`bb0fa0f`). 365 tests,
     typecheck and lint pass. Marked ready, Copilot review re-requested.
 - **Froskelår switch as a preset.** Presets store only `assumptions`, so the switch's 10
-  DataObject cells can't be saved with it (P9). Backend and frontend changes to let presets
-  carry `dataobject_tables` are being written on `feature/preset-dataobject-tables`. Their
-  PR links will be added here. No preset has been saved on any deployment.
+  DataObject cells can't be saved with it (P9). Presets now carry `dataobject_tables` in
+  AkerBP/autogration#1102 (backend: migration 0023, API, simulate with a preset applies its
+  table edits) and AkerBP/autogration_frontend#166 (save/load on the simulate page). Both
+  are ready for review with Copilot's review requested; backend CI passes. Merge order:
+  #1101 also adds migration 0023, so whichever merges second renumbers to 0024. Deploy the
+  backend first. No preset has been saved on any deployment.
+- **Settlement by booked capacity (T12).** Study scores now record each run's booked
+  capacity r_l, and `tiein optimise report` settles by proportional (the decided rule,
+  default), minimal and equal. Comparisons against the Froskelår-off baseline are marked
+  as the tie-in and not split by these rules. The watcher was restarted at 10:11 so wave
+  1's scores carry the basis. 222 toolkit tests pass.
 - **Relative value (T9).** `value_basis: oe` (default): value in Sm3 oil equivalent,
   pre-tax, discounted 8 % to 1 Jan 2027; prices optional. The toolkit has 220 tests.
 - **Run sharing (T10).** Studies in one project reuse identical runs instead of starting
@@ -33,7 +41,7 @@ Newest first. Run ids are on **test** unless marked; full ids are in the toolkit
   - restructure-w1, soften-w1 and outer-w1 share both runs.
   - One watcher steps all four every 15 min and logs to
     `data/projects/froskelaar-fixed/studies/watch.log`.
-- **Handoff.** This folder; ISSUES.md updated (T9–T11, P5, P9, 19 Nov runs); toolkit README
+- **Handoff.** This folder; ISSUES.md updated (T9–T12, P5, P9, 19 Nov runs); toolkit README
   has an optimisation section.
 
 ## 18 Nov 2026

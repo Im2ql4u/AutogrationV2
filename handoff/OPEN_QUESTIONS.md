@@ -40,9 +40,12 @@ matters, and where it is tracked. IDs refer to [ISSUES.md](../ISSUES.md) and
    each licence receives its award minus its own change. Four rules are implemented:
    minimal (losers made whole, winners share the rest pro rata to their gains),
    proportional to booked capacity (decided 18 Nov as the basis), equal, and Shapley
-   (needs coalition runs). `tiein optimise report` offers minimal and equal so far. Is
-   booked capacity still the rule once Froskelår, which has no booking, joins? And is the
-   settlement in money, tariff or capacity? (research/22 Q4)
+   (needs coalition runs). `tiein optimise report` now defaults to proportional, with
+   minimal and equal alongside (T12). The host licence 203 has no booking; its basis is
+   the unbooked FPSO capacity, which gives it 74–77 % of r_l today. Is that residual the
+   right basis for the host? Froskelår has no booking, so it gets no share of a policy
+   surplus unless a restructure books it; is that intended? And is the settlement in
+   money, tariff or capacity? (research/22 Q4)
 10. **The canonical baseline.** Today's weights and bookings, or the contracted bookings
     with neutral weights? Every delta depends on it. (research/22 Q5)
 11. **Restructuring bookings when Froskelår opens.** If a restructure (lend, pro rata, a

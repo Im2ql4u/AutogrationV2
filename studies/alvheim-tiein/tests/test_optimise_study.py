@@ -431,6 +431,104 @@ def test_scores_count_every_day_to_the_forecast_end_and_flag_grid_mismatches(
     assert not failed.feasible and failed.reasons == ["status Failed"]
 
 
+def tracked_bookings(
+    times: list[pd.Timestamp], oil: float = 100.0, gas: float = 10.0
+) -> pd.DataFrame:
+    """Group G's applied limits at each step, as tracked variables report them (gas in
+    1000 Sm3/d)."""
+    return pd.DataFrame(
+        [
+            {"time": t, "variable": f"resolve.module[0].MOD[{{PROD}}].GROUP[{{G}}].{v}", "value": x}
+            for t in times
+            for v, x in (("MaxQoil", oil), ("MaxQTotGas", gas))
+        ]
+    )
+
+
+def test_scores_record_booked_capacity_from_the_runs_own_limits(ref26: Reference) -> None:
+    s = spec(objective="oil_sm3")
+    ev = point("mh")
+    grid = s.fidelity.steps("mh")
+    res = results(grid, {"H1": 1.0, "S1": 3.0})
+    days = (mhgrid.FORECAST_END - mhgrid.FORECAST_START).days
+    members = {"G": ["H1", "S1"]}
+    limits = {"oil": 200.0, "gas": 20_000.0, "water": 50.0, "liquid": 250.0}
+    score = st.score_results(
+        s,
+        ev,
+        status=st.COMPLETED,
+        results=res,
+        ref=ref26,
+        steps=tracked_bookings(grid),
+        members=members,
+        limits=limits,
+    )
+    # G books 100 oil + 10 000 gas = 110 Sm3 oe/d, split 1:3 by production; the host
+    # licence holds the unbooked 100 oil + 10 000 gas (no discounting in ref26).
+    r = score.booked_capacity
+    assert r["HOST"] == pytest.approx(110 * 0.25 * days)
+    assert r["SAT"] == pytest.approx(110 * 0.75 * days)
+    assert r["203"] == pytest.approx(110 * days)
+    assert not any("booked capacity" in n for n in score.notes)
+
+    bare = st.score_results(
+        s,
+        ev,
+        status=st.COMPLETED,
+        results=res,
+        ref=ref26,
+        steps=tracked_bookings(grid),
+        members=members,
+    )
+    assert set(bare.booked_capacity) == {"HOST", "SAT"}
+    assert "booked capacity without the host's residual: no FPSO limits" in bare.notes
+
+
+def scored(eid: str, values: Mapping[str, float], capacity: Mapping[str, float]) -> st.Evaluation:
+    return point("monthly").model_copy(
+        update={
+            "id": eid,
+            "score": st.Score(
+                feasible=True,
+                objective=sum(values.values()),
+                licence_values=dict(values),
+                booked_capacity=dict(capacity),
+            ),
+        }
+    )
+
+
+def test_proportional_settlement_uses_the_bookings_in_force_or_the_plans_own() -> None:
+    state = start(st.StudySpec.model_validate(STUDY))
+    against = scored("e001", {"HOST": 100.0, "SAT": 100.0, "NEW": 0.0}, {"HOST": 3.0, "SAT": 1.0})
+    plan = scored("e009", {"HOST": 110.0, "SAT": 90.0, "NEW": 30.0}, {"HOST": 1.0, "NEW": 1.0})
+
+    def rule(table: pd.DataFrame, name: str) -> pd.DataFrame:
+        return table[table["rule"] == name].set_index("license")
+
+    # A policy scheme: the surplus G = 30 split 3:1 on the comparator's bookings.
+    t = rn.settlement_table(state, plan, against, "base")
+    assert list(dict.fromkeys(t["rule"])) == list(rn.SETTLEMENT_RULES)
+    p = rule(t, "proportional")
+    assert p["award"].to_dict() == pytest.approx({"HOST": 22.5, "NEW": 0.0, "SAT": 7.5})
+    assert p["transfer"].to_dict() == pytest.approx({"HOST": 12.5, "NEW": -30.0, "SAT": 17.5})
+    assert set(p["note"]) == {"basis: booked capacity of e001"}
+
+    # A restructure changes the basis: the plan's own bookings.
+    restructure = state.model_copy(
+        update={"spec": state.spec.model_copy(update={"scheme": "restructure_bookings"})}
+    )
+    p = rule(rn.settlement_table(restructure, plan, against, "base"), "proportional")
+    assert p["award"].to_dict() == pytest.approx({"HOST": 15.0, "NEW": 15.0, "SAT": 0.0})
+    assert p["transfer"].sum() == pytest.approx(0.0)
+
+    # Scored without tracked limits: the rule says why, the others still settle.
+    bare = scored("e002", {"HOST": 100.0, "SAT": 100.0, "NEW": 0.0}, {})
+    t = rn.settlement_table(state, plan, bare, "base")
+    assert rule(t, "proportional")["note"].str.contains("no booked capacity for e002").all()
+    assert rule(t, "minimal")["transfer"].sum() == pytest.approx(0.0)
+
+
 # ----------------------------------------------------------- runner, end to end
 def capacity(value: float) -> dict[str, Any]:
     return {
@@ -510,7 +608,8 @@ class FakeBackend:
         return path
 
     def steps(self, task_id: str) -> pd.DataFrame:
-        return pd.DataFrame(columns=["time"])
+        times = sorted(set(pd.to_datetime(self.results[task_id]["timestamp"])))
+        return tracked_bookings(times)
 
     def log_lines(self, task_id: str) -> list[str]:
         return []
@@ -541,7 +640,7 @@ def test_study_runs_end_to_end_against_a_fake_autogration(tmp_path: Path, ref26:
         project_paths=ppaths,
         paths=paths,
         tables=model(),
-        members={},
+        members={"G": ["H1", "S1"]},
         ref=ref26,
         ref_digest="r1",
     )
@@ -597,6 +696,19 @@ def test_study_runs_end_to_end_against_a_fake_autogration(tmp_path: Path, ref26:
     minimal = settle[(settle["against"] == "base") & (settle["rule"] == "minimal")]
     sat = minimal.set_index("license").loc["SAT"]
     assert sat["delta"] < 0 and sat["transfer"] == pytest.approx(-sat["delta"])
+    proportional = settle[(settle["against"] == "base") & (settle["rule"] == "proportional")]
+    assert proportional["award"].notna().all() and (proportional["award"] >= 0).all()
+    assert proportional["note"].str.startswith("basis: booked capacity of").all()
+    assert proportional.set_index("license").loc["HOST", "basis"] > 0
+
+    # With the switch states, Froskelaar off -> on is the tie-in: no surplus split.
+    tied = rn.write_report(s, paths.report, {"tie_in": "on", "baseline": "off"})
+    tied_rows = pd.read_csv(tied["settlement.csv"])
+    ref_rows = tied_rows[tied_rows["against"] == "ref:baseline"]
+    assert set(ref_rows["rule"]) == {"tie-in"} and ref_rows["transfer"].isna().all()
+    assert ref_rows["note"].str.contains("tie-in agreement").all()
+    base_rows = tied_rows[tied_rows["against"] == "base"]
+    assert set(base_rows["rule"]) == set(rn.SETTLEMENT_RULES)
 
     # Started: the spec is fixed now.
     paths.spec.write_text(yaml.safe_dump({**STUDY, "description": "v3"}), encoding="utf-8")

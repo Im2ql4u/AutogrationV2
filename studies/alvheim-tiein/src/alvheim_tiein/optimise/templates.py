@@ -59,7 +59,8 @@ _NOTES = {
 #
 # total_then_settle: candidates that maximise the hub (neutral weights, released
 # bookings), valued against the base case and the Froskelaar-off baseline; then
-# `tiein optimise report` settles who pays whom (minimal: losers made whole; equal).
+# `tiein optimise report` settles who pays whom (proportional to booked capacity, the
+# decided rule; minimal: losers made whole; equal).
 """,
     "restructure_bookings": """\
 #
